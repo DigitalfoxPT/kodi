@@ -1,0 +1,103 @@
+name: Build Android TV APK
+
+on:
+  push:
+    branches:
+      - android-tv-seek-preview
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-tv-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-arm64:
+    name: Kodi 21.3 Android TV arm64
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+
+    env:
+      KODI_DEPENDS: ${{ github.workspace }}/.android-tools/xbmc-depends
+      KODI_TARBALLS: ${{ github.workspace }}/.android-tools/xbmc-tarballs
+      KODI_BUILD: ${{ github.workspace }}/.android-tools/kodi-build
+      ANDROID_NDK_VERSION: 21.4.7075529
+
+    steps:
+      - name: Checkout Android TV branch
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf bison build-essential curl flex gawk git gperf \
+            lib32stdc++6 lib32z1 lib32z1-dev libcurl4-openssl-dev \
+            ninja-build unzip zip zlib1g-dev
+
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;33.0.1" \
+            "ndk;${ANDROID_NDK_VERSION}"
+
+      - name: Cache downloaded dependency sources
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.KODI_TARBALLS }}
+          key: kodi-21.3-android-tarballs-${{ runner.os }}-${{ hashFiles('tools/depends/target/**') }}
+          restore-keys: |
+            kodi-21.3-android-tarballs-${{ runner.os }}-
+
+      - name: Configure Android arm64 dependencies
+        working-directory: tools/depends
+        run: |
+          ./bootstrap
+          ./configure \
+            --with-tarballs="${KODI_TARBALLS}" \
+            --host=aarch64-linux-android \
+            --with-sdk-path="${ANDROID_HOME}" \
+            --with-ndk-path="${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}" \
+            --with-ndk-api=30 \
+            --prefix="${KODI_DEPENDS}" \
+            --enable-debug=no
+
+      - name: Build Android dependencies
+        working-directory: tools/depends
+        run: make -j2
+
+      - name: Configure Kodi
+        run: |
+          mkdir -p "${KODI_BUILD}"
+          make -C tools/depends/target/cmakebuildsys BUILD_DIR="${KODI_BUILD}"
+
+      - name: Build Kodi
+        run: cmake --build "${KODI_BUILD}" --parallel 2
+
+      - name: Package APK
+        run: cmake --build "${KODI_BUILD}" --target apk --parallel 2
+
+      - name: Collect APK
+        run: |
+          mkdir -p "${RUNNER_TEMP}/apk"
+          find "${GITHUB_WORKSPACE}" -type f -name "*.apk" -print -exec cp {} "${RUNNER_TEMP}/apk/" \;
+          test -n "$(find "${RUNNER_TEMP}/apk" -type f -name "*.apk" -print -quit)"
+
+      - name: Upload Android TV APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: kodi-21.3-android-tv-arm64-seek-preview
+          path: ${{ runner.temp }}/apk/*.apk
+          if-no-files-found: error
+          retention-days: 30
