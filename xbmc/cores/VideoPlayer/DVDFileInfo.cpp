@@ -88,7 +88,8 @@ int DegreeToOrientation(int degrees)
 }
 
 std::unique_ptr<CTexture> CDVDFileInfo::ExtractThumbToTexture(const CFileItem& fileItem,
-                                                              int chapterNumber)
+                                                              int chapterNumber,
+                                                              int64_t seekTimeMs)
 {
   if (!CanExtract(fileItem))
     return {};
@@ -156,8 +157,10 @@ std::unique_ptr<CTexture> CDVDFileInfo::ExtractThumbToTexture(const CFileItem& f
       int nTotalLen = demuxer->GetStreamLength();
 
       bool seekToChapter = chapterNumber > 0 && demuxer->GetChapterCount() > 0;
-      int64_t nSeekTo =
-          seekToChapter ? demuxer->GetChapterPos(chapterNumber) * 1000 : nTotalLen / 3;
+      int64_t nSeekTo = seekTimeMs >= 0
+                            ? std::min(seekTimeMs, static_cast<int64_t>(std::max(0, nTotalLen - 1)))
+                            : (seekToChapter ? demuxer->GetChapterPos(chapterNumber) * 1000
+                                             : nTotalLen / 3);
 
       CLog::LogF(LOGDEBUG, "seeking to pos {}ms (total: {}ms) in {}", nSeekTo, nTotalLen,
                  redactPath);

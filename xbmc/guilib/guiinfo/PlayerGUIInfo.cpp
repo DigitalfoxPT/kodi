@@ -25,12 +25,14 @@
 #include "guilib/GUIWindowManager.h"
 #include "guilib/guiinfo/GUIInfo.h"
 #include "guilib/guiinfo/GUIInfoHelper.h"
+#include "TextureDatabase.h"
 #include "guilib/guiinfo/GUIInfoLabels.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/Variant.h"
 #include "utils/log.h"
 
+#include <algorithm>
 #include <charconv>
 #include <cmath>
 #include <memory>
@@ -260,6 +262,28 @@ bool CPlayerGUIInfo::GetLabel(std::string& value, const CFileItem *item, int con
     case PLAYER_SEEKTIME:
       value = GetCurrentSeekTime(static_cast<TIME_FORMAT>(info.GetData1()));
       return true;
+    case PLAYER_SEEKPREVIEW:
+#if defined(TARGET_ANDROID)
+    {
+      if (!item || !m_appPlayer->IsPlayingVideo())
+        return false;
+
+      // Use ten-second buckets so repeated remote-control presses reuse the same
+      // cached image instead of decoding and storing a frame for every second.
+      constexpr int PREVIEW_INTERVAL_SECONDS = 10;
+      const int totalSeconds = GetTotalPlayTime();
+      int targetSeconds = std::lrint(g_application.GetTime()) +
+                          m_appPlayer->GetSeekHandler().GetSeekSize();
+      targetSeconds = std::clamp(targetSeconds, 0, std::max(0, totalSeconds - 1));
+      targetSeconds = (targetSeconds / PREVIEW_INTERVAL_SECONDS) * PREVIEW_INTERVAL_SECONDS;
+
+      value = CTextureUtils::GetWrappedImageURL(
+          item->GetDynPath(), StringUtils::Format("videoseek_{}", targetSeconds));
+      return true;
+    }
+#else
+      return false;
+#endif
     case PLAYER_SEEKSTEPSIZE:
     {
       int seekSize = m_appPlayer->GetSeekHandler().GetSeekSize();
@@ -733,3 +757,4 @@ std::vector<std::pair<float, float>> CPlayerGUIInfo::GetChapters(const CDataCach
   }
   return ranges;
 }
+

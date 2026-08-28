@@ -192,6 +192,7 @@ std::string CTextureCacheJob::DecodeImageURL(const std::string &url, unsigned in
         thumbURL.GetUserName() == "picturefolder")
       additional_info = thumbURL.GetUserName();
     if (StringUtils::StartsWith(thumbURL.GetUserName(), "video_") ||
+        StringUtils::StartsWith(thumbURL.GetUserName(), "videoseek_") ||
         StringUtils::StartsWith(thumbURL.GetUserName(), "pvr") ||
         StringUtils::StartsWith(thumbURL.GetUserName(), "epg"))
       additional_info = thumbURL.GetUserName();
@@ -321,3 +322,4 @@ bool CTextureUseCountJob::DoWork()
   }
   return true;
 }
+

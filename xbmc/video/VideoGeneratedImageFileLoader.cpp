@@ -16,12 +16,13 @@
 #include "guilib/Texture.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
+#include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "video/VideoInfoTag.h"
 
 bool VIDEO::CVideoGeneratedImageFileLoader::CanLoad(const std::string& specialType) const
 {
-  return specialType == "video";
+  return specialType == "video" || StringUtils::StartsWith(specialType, "videoseek_");
 }
 
 namespace
@@ -51,8 +52,9 @@ void SetupRarOptions(CFileItem& item, const std::string& path)
 std::unique_ptr<CTexture> VIDEO::CVideoGeneratedImageFileLoader::Load(
     const std::string& specialType, const std::string& filePath, unsigned int, unsigned int) const
 {
-  if (!CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
-          CSettings::SETTING_MYVIDEOS_EXTRACTTHUMB))
+  const bool seekPreview = StringUtils::StartsWith(specialType, "videoseek_");
+  if (!seekPreview && !CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+                          CSettings::SETTING_MYVIDEOS_EXTRACTTHUMB))
   {
     return {};
   }
@@ -62,5 +64,19 @@ std::unique_ptr<CTexture> VIDEO::CVideoGeneratedImageFileLoader::Load(
   if (URIUtils::IsInRAR(filePath))
     SetupRarOptions(item, filePath);
 
-  return CDVDFileInfo::ExtractThumbToTexture(item);
+  int64_t seekTimeMs = -1;
+  if (seekPreview)
+  {
+    try
+    {
+      seekTimeMs = std::stoll(specialType.substr(10)) * 1000;
+    }
+    catch (...)
+    {
+      return {};
+    }
+  }
+
+  return CDVDFileInfo::ExtractThumbToTexture(item, 0, seekTimeMs);
 }
+

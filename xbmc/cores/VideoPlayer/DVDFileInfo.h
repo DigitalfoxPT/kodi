@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -24,7 +25,8 @@ class CDVDFileInfo
 {
 public:
   static std::unique_ptr<CTexture> ExtractThumbToTexture(const CFileItem& fileItem,
-                                                         int chapterNumber = 0);
+                                                         int chapterNumber = 0,
+                                                         int64_t seekTimeMs = -1);
 
   /*!
    * @brief Can a thumbnail image and file stream details be extracted from this file item?
@@ -61,3 +63,4 @@ private:
   */
   static void ProcessExternalSubtitles(CFileItem* item);
 };
+

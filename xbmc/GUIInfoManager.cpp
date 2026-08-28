@@ -924,6 +924,7 @@ const infomap player_labels[] = {{"hasmedia", PLAYER_HAS_MEDIA},
                                  {"cuts", PLAYER_CUTS},
                                  {"scenemarkers", PLAYER_SCENE_MARKERS},
                                  {"hasscenemarkers", PLAYER_HAS_SCENE_MARKERS},
+                                 {"seekpreview", PLAYER_SEEKPREVIEW},
                                  {"chapters", PLAYER_CHAPTERS}};
 
 /// \page modules__infolabels_boolean_conditions

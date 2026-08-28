@@ -78,6 +78,7 @@
 #define PLAYER_CUTS 70
 #define PLAYER_SCENE_MARKERS 71
 #define PLAYER_HAS_SCENE_MARKERS 72
+#define PLAYER_SEEKPREVIEW 73
 // Keep player infolabels that work with offset and position together
 #define PLAYER_PATH                  81
 #define PLAYER_FILEPATH              82
