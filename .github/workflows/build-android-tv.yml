@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-arm64:
-    name: Kodi 21.3 Android TV arm64
+  build-armv7:
+    name: Kodi 21.3 Android TV ARMv7
     runs-on: ubuntu-22.04
     timeout-minutes: 360
 
@@ -67,7 +67,7 @@ jobs:
           ./bootstrap
           ./configure \
             --with-tarballs="${KODI_TARBALLS}" \
-            --host=aarch64-linux-android \
+            --host=arm-linux-androideabi \
             --with-sdk-path="${ANDROID_HOME}" \
             --with-ndk-path="${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}" \
             --with-ndk-api=30 \
@@ -112,7 +112,7 @@ jobs:
       - name: Upload Android TV APK
         uses: actions/upload-artifact@v4
         with:
-          name: kodi-21.3-android-tv-arm64-seek-preview
+          name: kodi-21.3-android-tv-armv7-seek-preview
           path: ${{ runner.temp }}/apk/*.apk
           if-no-files-found: error
           retention-days: 30
