@@ -18,6 +18,7 @@
 #include "settings/SettingsComponent.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
+#include "utils/log.h"
 #include "video/VideoInfoTag.h"
 
 bool VIDEO::CVideoGeneratedImageFileLoader::CanLoad(const std::string& specialType) const
@@ -77,6 +78,20 @@ std::unique_ptr<CTexture> VIDEO::CVideoGeneratedImageFileLoader::Load(
     }
   }
 
-  return CDVDFileInfo::ExtractThumbToTexture(item, 0, seekTimeMs);
+  if (seekPreview)
+  {
+    CLog::Log(LOGINFO, "Seek preview: extracting frame at {}ms from {}", seekTimeMs,
+              CURL::GetRedacted(filePath));
+  }
+  std::unique_ptr<CTexture> texture = CDVDFileInfo::ExtractThumbToTexture(item, 0, seekTimeMs);
+  if (seekPreview)
+  {
+    if (texture)
+      CLog::Log(LOGINFO, "Seek preview: frame extracted successfully at {}ms", seekTimeMs);
+    else
+      CLog::Log(LOGWARNING, "Seek preview: failed to extract frame at {}ms from {}", seekTimeMs,
+                CURL::GetRedacted(filePath));
+  }
+  return texture;
 }
 
