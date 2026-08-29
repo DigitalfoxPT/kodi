@@ -76,7 +76,18 @@ jobs:
 
       - name: Build Android dependencies
         working-directory: tools/depends
-        run: make -j2
+        run: |
+          # Several vendored generators use the words "error" and "warning" for
+          # non-fatal diagnostics. GitHub problem matchers otherwise present them
+          # as failed annotations even though the dependency build succeeds.
+          # Keep the complete messages in the log while reporting a real make
+          # failure as one accurate annotation.
+          if ! make -j2 2>&1 | sed -E \
+            -e 's/(^|[[:space:]])warning:/\\1dependency-warning:/g' \
+            -e 's/(^|[[:space:]])error:/\\1dependency-error:/g'; then
+            echo "::error::Android dependency build failed; inspect this step's log"
+            exit 1
+          fi
 
       - name: Restore persistent APK signing key
         env:
