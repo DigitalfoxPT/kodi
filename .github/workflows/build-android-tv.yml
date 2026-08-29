@@ -78,19 +78,21 @@ jobs:
         working-directory: tools/depends
         run: make -j2
 
-      - name: Create APK signing key
+      - name: Restore persistent APK signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
+          if [ -z "${ANDROID_KEYSTORE_BASE64}" ]; then
+            echo "::error::Repository secret ANDROID_KEYSTORE_BASE64 is required"
+            exit 1
+          fi
           mkdir -p "${HOME}/.android"
-          keytool -genkeypair \
+          printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 --decode > "${HOME}/.android/debug.keystore"
+          chmod 600 "${HOME}/.android/debug.keystore"
+          keytool -list \
             -keystore "${HOME}/.android/debug.keystore" \
             -storepass android \
-            -alias androiddebugkey \
-            -keypass android \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US" \
-            -noprompt
+            -alias androiddebugkey >/dev/null
 
       - name: Configure Kodi
         run: |
