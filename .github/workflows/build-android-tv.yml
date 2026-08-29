@@ -118,14 +118,18 @@ jobs:
 
       - name: Collect APK
         run: |
+          APK_SOURCE="$(find "${GITHUB_WORKSPACE}" -type f -name "kodiapp-armeabi-v7a-release.apk" -print -quit)"
+          if [ -z "${APK_SOURCE}" ]; then
+            echo "::error::kodiapp-armeabi-v7a-release.apk was not generated"
+            exit 1
+          fi
           mkdir -p "${RUNNER_TEMP}/apk"
-          find "${GITHUB_WORKSPACE}" -type f -name "*.apk" -print -exec cp {} "${RUNNER_TEMP}/apk/" \;
-          test -n "$(find "${RUNNER_TEMP}/apk" -type f -name "*.apk" -print -quit)"
+          cp "${APK_SOURCE}" "${RUNNER_TEMP}/apk/kodiapp-armeabi-v7a-release.apk"
 
       - name: Upload Android TV APK
         uses: actions/upload-artifact@v6
         with:
           name: kodi-21.3-android-tv-armv7-seek-preview
-          path: ${{ runner.temp }}/apk/*.apk
+          path: ${{ runner.temp }}/apk/kodiapp-armeabi-v7a-release.apk
           if-no-files-found: error
           retention-days: 30
