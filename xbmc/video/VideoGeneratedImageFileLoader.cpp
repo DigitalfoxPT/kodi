@@ -101,19 +101,20 @@ std::unique_ptr<CTexture> VIDEO::CVideoGeneratedImageFileLoader::Load(
     const auto& components = CServiceBroker::GetAppComponents();
     const auto appPlayer = components.GetComponent<CApplicationPlayer>();
     const CSeekHandler& seekHandler = appPlayer->GetSeekHandler();
+    const bool playbackActive = appPlayer->IsPlayingVideo();
     const int64_t totalTimeMs = appPlayer->GetTotalTime();
     int64_t currentTargetMs = seekHandler.GetSeekPreviewTimeMs();
     currentTargetMs =
         std::clamp(currentTargetMs, int64_t{0}, std::max(int64_t{0}, totalTimeMs - 1));
-    if (!appPlayer->IsPlayingVideo() || !seekHandler.IsSeekPreviewActive() ||
-        currentTargetMs != seekTimeMs)
+    if (playbackActive &&
+        (!seekHandler.IsSeekPreviewActive() || currentTargetMs != seekTimeMs))
     {
       CLog::Log(LOGDEBUG, "Seek preview: skipping obsolete frame at {}ms", seekTimeMs);
       return {};
     }
 
-    CLog::Log(LOGINFO, "Seek preview: requesting frame at {}ms from persistent decoder for {}",
-              seekTimeMs,
+    CLog::Log(LOGINFO, "Seek preview: {} frame at {}ms from persistent decoder for {}",
+              playbackActive ? "requesting" : "pre-caching", seekTimeMs,
               CURL::GetRedacted(filePath));
 
     std::unique_ptr<CTexture> texture = CDVDFileInfo::ExtractSeekPreviewToTexture(
@@ -124,8 +125,8 @@ std::unique_ptr<CTexture> VIDEO::CVideoGeneratedImageFileLoader::Load(
     int64_t latestTargetMs = seekHandler.GetSeekPreviewTimeMs();
     latestTargetMs =
         std::clamp(latestTargetMs, int64_t{0}, std::max(int64_t{0}, appPlayer->GetTotalTime() - 1));
-    if (!appPlayer->IsPlayingVideo() || !seekHandler.IsSeekPreviewActive() ||
-        latestTargetMs != seekTimeMs)
+    if (appPlayer->IsPlayingVideo() &&
+        (!seekHandler.IsSeekPreviewActive() || latestTargetMs != seekTimeMs))
     {
       CLog::Log(LOGDEBUG, "Seek preview: discarding obsolete decoded frame at {}ms", seekTimeMs);
       return {};

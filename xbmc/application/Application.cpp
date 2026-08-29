@@ -945,6 +945,19 @@ bool CApplication::OnAction(const CAction &action)
 
   const auto appPlayer = GetComponent<CApplicationPlayer>();
 
+#if defined(TARGET_ANDROID)
+  // A fullscreen window normally consumes OK and Back before global action
+  // listeners are notified. While the Android TV preview cursor is active,
+  // give its seek handler first refusal so OK really confirms the target and
+  // Back cancels it. Unsupported actions continue through Kodi as usual.
+  if (appPlayer->IsPlayingVideo() && appPlayer->GetSeekHandler().IsSeekPreviewActive() &&
+      appPlayer->GetSeekHandler().OnAction(action))
+  {
+    GetComponent<CApplicationPowerHandling>()->ResetNavigationTimer();
+    return true;
+  }
+#endif
+
   if (action.GetID() == ACTION_TOGGLE_FULLSCREEN)
   {
     CServiceBroker::GetWinSystem()->GetGfxContext().ToggleFullScreen();

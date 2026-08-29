@@ -80,6 +80,7 @@ private:
   std::map<SeekType, std::vector<int> > m_backwardSeekSteps;
   CStopWatch m_timer;
   bool m_seekPreviewPending{false};
+  bool m_seekPreviewResumePlayback{false};
   int64_t m_seekPreviewTimeMs{0};
   CStopWatch m_timerTimeCode;
   int m_timeCodeStamp[6];

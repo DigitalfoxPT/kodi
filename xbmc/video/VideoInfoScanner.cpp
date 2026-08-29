@@ -16,6 +16,7 @@
 #include "URL.h"
 #include "Util.h"
 #include "VideoInfoDownloader.h"
+#include "VideoSeekPreviewCache.h"
 #include "cores/VideoPlayer/DVDFileInfo.h"
 #include "dialogs/GUIDialogExtendedProgressBar.h"
 #include "dialogs/GUIDialogProgress.h"
@@ -161,6 +162,11 @@ namespace VIDEO
             m_handle->SetTitle(g_localizeStrings.Get(331));
           m_database.Compress(false);
         }
+
+        // On Android TV, keep a persistent ten-second seek-preview cache in
+        // step with the library. Cached frames make remote-control scrubbing
+        // immediate even when the source video is on SMB.
+        CVideoSeekPreviewCache::Update(m_database, true);
       }
 
       CServiceBroker::GetGUI()->GetInfoManager().GetInfoProviders().GetLibraryInfoProvider().ResetLibraryBools();

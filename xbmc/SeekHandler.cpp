@@ -87,6 +87,7 @@ void CSeekHandler::Reset()
   m_seekSize = 0;
   m_timeCodePosition = 0;
   m_seekPreviewPending = false;
+  m_seekPreviewResumePlayback = false;
   m_seekPreviewTimeMs = 0;
 }
 
@@ -193,27 +194,8 @@ void CSeekHandler::SeekSeconds(int seconds)
 
 int CSeekHandler::GetSeekSize() const
 {
-  bool previewPending = false;
-  int64_t previewTimeMs = 0;
-  double seekSize = 0.0;
-  {
-    std::unique_lock<CCriticalSection> lock(m_critSection);
-    previewPending = m_seekPreviewPending;
-    previewTimeMs = m_seekPreviewTimeMs;
-    seekSize = m_seekSize;
-  }
-
-#if defined(TARGET_ANDROID)
-  if (previewPending)
-  {
-    const auto& components = CServiceBroker::GetAppComponents();
-    const auto appPlayer = components.GetComponent<CApplicationPlayer>();
-    return MathUtils::round_int(
-        static_cast<double>(previewTimeMs - appPlayer->GetTime()) / 1000.0);
-  }
-#endif
-
-  return MathUtils::round_int(seekSize);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
+  return MathUtils::round_int(m_seekSize);
 }
 
 bool CSeekHandler::IsSeekPreviewActive() const
@@ -250,17 +232,36 @@ void CSeekHandler::SeekPreviewSeconds(int seconds)
   const int64_t maxTimeMs = std::max(minTimeMs, appPlayer->GetMaxTime() - 1);
 
   int64_t targetTimeMs = 0;
+  bool pausePlayback = false;
   {
     std::unique_lock<CCriticalSection> lock(m_critSection);
-    const int64_t baseTimeMs = m_seekPreviewPending ? m_seekPreviewTimeMs : playTimeMs;
-    targetTimeMs =
-        std::clamp(baseTimeMs + static_cast<int64_t>(seconds) * 1000, minTimeMs, maxTimeMs);
+    constexpr int64_t previewIntervalMs = 10'000;
+    int64_t baseTimeMs = m_seekPreviewTimeMs;
+    if (!m_seekPreviewPending)
+    {
+      // Use stable ten-second timeline markers. The same exact markers are
+      // generated while the video library is updated, so a cached image and
+      // the position confirmed with OK can never differ.
+      baseTimeMs = ((playTimeMs + previewIntervalMs / 2) / previewIntervalMs) *
+                   previewIntervalMs;
+      pausePlayback = appPlayer->CanPause() && !appPlayer->IsPaused();
+      m_seekPreviewResumePlayback = pausePlayback;
+    }
+
+    targetTimeMs = std::clamp(baseTimeMs + static_cast<int64_t>(seconds) * 1000,
+                              minTimeMs, maxTimeMs);
+    targetTimeMs = (targetTimeMs / previewIntervalMs) * previewIntervalMs;
 
     m_seekPreviewPending = true;
     m_seekPreviewTimeMs = targetTimeMs;
-    m_seekSize = static_cast<double>(targetTimeMs - playTimeMs) / 1000.0;
+    // Do not reuse Kodi's delayed-seek offset. That value is relative to the
+    // moving playback clock and produced the misleading "Seeking +..." label.
+    m_seekSize = 0;
     m_seekChanged = true;
   }
+
+  if (pausePlayback)
+    appPlayer->Pause();
 
   CLog::Log(LOGINFO, "Seek preview: selected {}ms ({}s step, waiting for OK)", targetTimeMs,
             seconds);
@@ -269,33 +270,45 @@ void CSeekHandler::SeekPreviewSeconds(int seconds)
 bool CSeekHandler::CommitSeekPreview()
 {
   int64_t targetTimeMs = 0;
+  bool resumePlayback = false;
   {
     std::unique_lock<CCriticalSection> lock(m_critSection);
     if (!m_seekPreviewPending)
       return false;
 
     targetTimeMs = m_seekPreviewTimeMs;
+    resumePlayback = m_seekPreviewResumePlayback;
     Reset();
     m_seekChanged = true;
   }
 
   CLog::Log(LOGINFO, "Seek preview: confirmed {}ms with OK", targetTimeMs);
   g_application.SeekTime(static_cast<double>(targetTimeMs) / 1000.0);
+  const auto appPlayer =
+      CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>();
+  if (resumePlayback && appPlayer->IsPaused())
+    appPlayer->Pause();
   return true;
 }
 
 bool CSeekHandler::CancelSeekPreview()
 {
+  bool resumePlayback = false;
   {
     std::unique_lock<CCriticalSection> lock(m_critSection);
     if (!m_seekPreviewPending)
       return false;
 
+    resumePlayback = m_seekPreviewResumePlayback;
     Reset();
     m_seekChanged = true;
   }
 
   CLog::Log(LOGINFO, "Seek preview: cancelled, playback position unchanged");
+  const auto appPlayer =
+      CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>();
+  if (resumePlayback && appPlayer->IsPaused())
+    appPlayer->Pause();
   return true;
 }
 
