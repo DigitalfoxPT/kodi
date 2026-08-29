@@ -269,13 +269,9 @@ bool CPlayerGUIInfo::GetLabel(std::string& value, const CFileItem *item, int con
       if (!item || !m_appPlayer->IsPlayingVideo() || !seekHandler.IsSeekPreviewActive())
         return false;
 
-      // Use ten-second buckets so repeated remote-control presses reuse the same
-      // cached image instead of decoding and storing a frame for every second.
-      constexpr int PREVIEW_INTERVAL_SECONDS = 10;
       const int totalSeconds = GetTotalPlayTime();
       int targetSeconds = seekHandler.GetSeekPreviewTime();
       targetSeconds = std::clamp(targetSeconds, 0, std::max(0, totalSeconds - 1));
-      targetSeconds = (targetSeconds / PREVIEW_INTERVAL_SECONDS) * PREVIEW_INTERVAL_SECONDS;
 
       value = CTextureUtils::GetWrappedImageURL(
           item->GetDynPath(), StringUtils::Format("videoseek_{}", targetSeconds));
@@ -757,4 +753,3 @@ std::vector<std::pair<float, float>> CPlayerGUIInfo::GetChapters(const CDataCach
   }
   return ranges;
 }
-

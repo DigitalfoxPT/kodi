@@ -98,12 +98,10 @@ std::unique_ptr<CTexture> VIDEO::CVideoGeneratedImageFileLoader::Load(
     const auto& components = CServiceBroker::GetAppComponents();
     const auto appPlayer = components.GetComponent<CApplicationPlayer>();
     const CSeekHandler& seekHandler = appPlayer->GetSeekHandler();
-    constexpr int64_t PREVIEW_INTERVAL_MS = 10000;
     const int64_t totalTimeMs = appPlayer->GetTotalTime();
     int64_t currentTargetMs = static_cast<int64_t>(seekHandler.GetSeekPreviewTime()) * 1000;
     currentTargetMs =
         std::clamp(currentTargetMs, int64_t{0}, std::max(int64_t{0}, totalTimeMs - 1));
-    currentTargetMs = (currentTargetMs / PREVIEW_INTERVAL_MS) * PREVIEW_INTERVAL_MS;
     if (!appPlayer->IsPlayingVideo() || !seekHandler.IsSeekPreviewActive() ||
         currentTargetMs != seekTimeMs)
     {
@@ -111,10 +109,25 @@ std::unique_ptr<CTexture> VIDEO::CVideoGeneratedImageFileLoader::Load(
       return {};
     }
 
-    CLog::Log(LOGINFO, "Seek preview: extracting frame at {}ms from {}", seekTimeMs,
+    CLog::Log(LOGINFO, "Seek preview: requesting frame at {}ms from persistent decoder for {}",
+              seekTimeMs,
               CURL::GetRedacted(filePath));
 
-    std::unique_ptr<CTexture> texture = CDVDFileInfo::ExtractThumbToTexture(item, 0, seekTimeMs);
+    std::unique_ptr<CTexture> texture = CDVDFileInfo::ExtractSeekPreviewToTexture(
+        item, seekTimeMs, preferredWidth, preferredHeight);
+
+    // A slow first SMB seek can finish after the user has already pressed the
+    // remote again. Never publish that obsolete frame over the newest target.
+    int64_t latestTargetMs = static_cast<int64_t>(seekHandler.GetSeekPreviewTime()) * 1000;
+    latestTargetMs =
+        std::clamp(latestTargetMs, int64_t{0}, std::max(int64_t{0}, appPlayer->GetTotalTime() - 1));
+    if (!appPlayer->IsPlayingVideo() || !seekHandler.IsSeekPreviewActive() ||
+        latestTargetMs != seekTimeMs)
+    {
+      CLog::Log(LOGDEBUG, "Seek preview: discarding obsolete decoded frame at {}ms", seekTimeMs);
+      return {};
+    }
+
     if (texture)
       CLog::Log(LOGINFO, "Seek preview: frame extracted successfully at {}ms", seekTimeMs);
     else

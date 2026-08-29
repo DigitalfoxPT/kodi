@@ -40,8 +40,11 @@
 #include "Util.h"
 #include "utils/LangCodeExpander.h"
 
+#include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <memory>
+#include <mutex>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -85,6 +88,267 @@ int DegreeToOrientation(int degrees)
     default:
       return 0;
   }
+}
+
+namespace
+{
+constexpr unsigned int SEEK_PREVIEW_MAX_WIDTH = 480;
+
+std::unique_ptr<CTexture> CreateTextureFromPicture(const VideoPicture& picture,
+                                                   const CDVDStreamInfo& hint,
+                                                   unsigned int preferredWidth,
+                                                   unsigned int preferredHeight)
+{
+  if (!picture.videoBuffer || picture.iWidth == 0 || picture.iHeight == 0 ||
+      picture.iDisplayWidth == 0 || picture.iDisplayHeight == 0)
+  {
+    return {};
+  }
+
+  unsigned int width = std::min(picture.iDisplayWidth, preferredWidth);
+  double aspect = static_cast<double>(picture.iDisplayWidth) /
+                  static_cast<double>(picture.iDisplayHeight);
+  if (hint.forced_aspect && hint.aspect > 0.0)
+    aspect = hint.aspect;
+
+  unsigned int height = static_cast<unsigned int>(static_cast<double>(width) / aspect);
+  if (preferredHeight > 0 && height > preferredHeight)
+  {
+    height = preferredHeight;
+    width = static_cast<unsigned int>(static_cast<double>(height) * aspect);
+  }
+
+  width = std::max(1U, width);
+  height = std::max(1U, height);
+
+  auto result = CTexture::CreateTexture(width, height);
+  if (!result)
+    return {};
+  result->SetAlpha(false);
+
+  SwsContext* context =
+      sws_getContext(picture.iWidth, picture.iHeight, AV_PIX_FMT_YUV420P, width, height,
+                     AV_PIX_FMT_BGRA, SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
+  if (!context)
+    return {};
+
+  uint8_t* planes[YuvImage::MAX_PLANES];
+  int strides[YuvImage::MAX_PLANES];
+  picture.videoBuffer->GetPlanes(planes);
+  picture.videoBuffer->GetStrides(strides);
+  uint8_t* src[4] = {planes[0], planes[1], planes[2], nullptr};
+  int srcStrides[4] = {strides[0], strides[1], strides[2], 0};
+  uint8_t* dst[4] = {result->GetPixels(), nullptr, nullptr, nullptr};
+  int dstStrides[4] = {static_cast<int>(result->GetPitch()), 0, 0, 0};
+
+  result->SetOrientation(DegreeToOrientation(hint.orientation));
+  sws_scale(context, src, srcStrides, 0, picture.iHeight, dst, dstStrides);
+  sws_freeContext(context);
+  return result;
+}
+
+class CSeekPreviewSession
+{
+public:
+  std::unique_ptr<CTexture> Extract(const CFileItem& fileItem,
+                                    int64_t seekTimeMs,
+                                    unsigned int preferredWidth,
+                                    unsigned int preferredHeight)
+  {
+    if (!Open(fileItem))
+      return {};
+
+    const int64_t targetMs =
+        std::clamp(seekTimeMs, int64_t{0}, std::max(int64_t{0}, m_totalLengthMs - 1));
+    const auto start = std::chrono::steady_clock::now();
+
+    // Seek backwards to a keyframe, exactly as a dedicated preview player would.
+    // Resetting only the codec keeps the SMB input and demuxer alive between requests.
+    m_videoCodec->Reset();
+    m_videoCodec->SetCodecControl(DVD_CODEC_CTRL_DROP_ANY | DVD_CODEC_CTRL_NO_POSTPROC);
+    if (!m_demuxer->SeekTime(static_cast<double>(targetMs), true))
+    {
+      CLog::Log(LOGWARNING, "Seek preview session: seek to {}ms failed in {}", targetMs,
+                CURL::GetRedacted(m_path));
+      return {};
+    }
+
+    CDVDVideoCodec::VCReturn decoderState = CDVDVideoCodec::VC_NONE;
+    VideoPicture picture{};
+    int packetsTried = 0;
+    int packetsRemaining = std::max(160, m_demuxer->GetNrOfStreams() * 160);
+
+    while (packetsRemaining-- > 0)
+    {
+      DemuxPacket* packet = m_demuxer->Read();
+      ++packetsTried;
+      if (!packet)
+        break;
+
+      if (packet->iStreamId != m_videoStream || packet->demuxerId != m_demuxerId)
+      {
+        CDVDDemuxUtils::FreeDemuxPacket(packet);
+        continue;
+      }
+
+      m_videoCodec->AddData(*packet);
+      CDVDDemuxUtils::FreeDemuxPacket(packet);
+
+      decoderState = CDVDVideoCodec::VC_NONE;
+      while (decoderState == CDVDVideoCodec::VC_NONE)
+        decoderState = m_videoCodec->GetPicture(&picture);
+
+      if (decoderState == CDVDVideoCodec::VC_PICTURE &&
+          !(picture.iFlags & DVP_FLAG_DROPPED))
+      {
+        const unsigned int maxWidth =
+            preferredWidth > 0 ? std::min(preferredWidth, SEEK_PREVIEW_MAX_WIDTH)
+                               : SEEK_PREVIEW_MAX_WIDTH;
+        auto texture =
+            CreateTextureFromPicture(picture, m_hint, maxWidth, preferredHeight);
+        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - start);
+        CLog::Log(LOGINFO,
+                  "Seek preview session: decoded {}ms in {}ms after {} packets (decoder reused)",
+                  targetMs, elapsed.count(), packetsTried);
+        return texture;
+      }
+
+      if (decoderState == CDVDVideoCodec::VC_ERROR ||
+          decoderState == CDVDVideoCodec::VC_FATAL)
+      {
+        break;
+      }
+    }
+
+    CLog::Log(LOGWARNING, "Seek preview session: decode failed at {}ms in {} after {} packets",
+              targetMs, CURL::GetRedacted(m_path), packetsTried);
+    return {};
+  }
+
+private:
+  bool Open(const CFileItem& fileItem)
+  {
+    if (m_path == fileItem.GetPath() && m_inputStream && m_demuxer && m_videoCodec)
+      return true;
+
+    Reset();
+    if (!CDVDFileInfo::CanExtract(fileItem))
+      return false;
+
+    CFileItem item(fileItem);
+    item.SetMimeTypeForInternetFile();
+    m_inputStream = CDVDFactoryInputStream::CreateInputStream(nullptr, item);
+    if (!m_inputStream || !m_inputStream->Open())
+    {
+      CLog::Log(LOGERROR, "Seek preview session: failed to open {}",
+                CURL::GetRedacted(fileItem.GetPath()));
+      Reset();
+      return false;
+    }
+
+    m_demuxer.reset(CDVDFactoryDemuxer::CreateDemuxer(m_inputStream, true));
+    if (!m_demuxer)
+    {
+      CLog::Log(LOGERROR, "Seek preview session: failed to create demuxer for {}",
+                CURL::GetRedacted(fileItem.GetPath()));
+      Reset();
+      return false;
+    }
+
+    for (CDemuxStream* stream : m_demuxer->GetStreams())
+    {
+      if (!stream)
+        continue;
+
+      if (m_videoStream < 0 && stream->type == STREAM_VIDEO &&
+          !(stream->flags & AV_DISPOSITION_ATTACHED_PIC))
+      {
+        m_videoStream = stream->uniqueId;
+        m_demuxerId = stream->demuxerId;
+      }
+      else
+      {
+        m_demuxer->EnableStream(stream->demuxerId, stream->uniqueId, false);
+      }
+    }
+
+    CDemuxStream* stream = m_demuxer->GetStream(m_demuxerId, m_videoStream);
+    if (!stream)
+    {
+      CLog::Log(LOGWARNING, "Seek preview session: no video stream in {}",
+                CURL::GetRedacted(fileItem.GetPath()));
+      Reset();
+      return false;
+    }
+
+    m_processInfo.reset(CProcessInfo::CreateInstance());
+    std::vector<AVPixelFormat> pixelFormats{AV_PIX_FMT_YUV420P};
+    m_processInfo->SetPixFormats(pixelFormats);
+
+    m_hint = CDVDStreamInfo(*stream, true);
+    m_hint.codecOptions = CODEC_FORCE_SOFTWARE;
+    m_videoCodec = CDVDFactoryCodec::CreateVideoCodec(m_hint, *m_processInfo);
+    if (!m_videoCodec)
+    {
+      CLog::Log(LOGERROR, "Seek preview session: failed to create software decoder for {}",
+                CURL::GetRedacted(fileItem.GetPath()));
+      Reset();
+      return false;
+    }
+
+    m_path = fileItem.GetPath();
+    m_totalLengthMs = m_demuxer->GetStreamLength();
+    CLog::Log(LOGINFO, "Seek preview session: opened persistent software decoder for {}",
+              CURL::GetRedacted(m_path));
+    return true;
+  }
+
+  void Reset()
+  {
+    m_videoCodec.reset();
+    m_processInfo.reset();
+    m_demuxer.reset();
+    m_inputStream.reset();
+    m_hint.Clear();
+    m_path.clear();
+    m_videoStream = -1;
+    m_demuxerId = -1;
+    m_totalLengthMs = 0;
+  }
+
+  std::string m_path;
+  std::shared_ptr<CDVDInputStream> m_inputStream;
+  std::unique_ptr<CDVDDemux> m_demuxer;
+  std::unique_ptr<CProcessInfo> m_processInfo;
+  std::unique_ptr<CDVDVideoCodec> m_videoCodec;
+  CDVDStreamInfo m_hint;
+  int m_videoStream{-1};
+  int64_t m_demuxerId{-1};
+  int64_t m_totalLengthMs{0};
+};
+
+std::mutex g_seekPreviewSessionMutex;
+std::unique_ptr<CSeekPreviewSession> g_seekPreviewSession;
+} // namespace
+
+std::unique_ptr<CTexture> CDVDFileInfo::ExtractSeekPreviewToTexture(
+    const CFileItem& fileItem,
+    int64_t seekTimeMs,
+    unsigned int preferredWidth,
+    unsigned int preferredHeight)
+{
+  std::unique_lock<std::mutex> lock(g_seekPreviewSessionMutex);
+  if (!g_seekPreviewSession)
+    g_seekPreviewSession = std::make_unique<CSeekPreviewSession>();
+
+  return g_seekPreviewSession->Extract(fileItem, seekTimeMs, preferredWidth, preferredHeight);
+}
+
+void CDVDFileInfo::ResetSeekPreview()
+{
+  std::unique_lock<std::mutex> lock(g_seekPreviewSessionMutex);
+  g_seekPreviewSession.reset();
 }
 
 std::unique_ptr<CTexture> CDVDFileInfo::ExtractThumbToTexture(const CFileItem& fileItem,
@@ -205,34 +469,9 @@ std::unique_ptr<CTexture> CDVDFileInfo::ExtractThumbToTexture(const CFileItem& f
 
         if (iDecoderState == CDVDVideoCodec::VC_PICTURE && !(picture.iFlags & DVP_FLAG_DROPPED))
         {
-          unsigned int nWidth =
-              std::min(picture.iDisplayWidth,
-                       CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_imageRes);
-          double aspect = (double)picture.iDisplayWidth / (double)picture.iDisplayHeight;
-          if (hint.forced_aspect && hint.aspect != 0)
-            aspect = hint.aspect;
-          unsigned int nHeight = (unsigned int)((double)nWidth / aspect);
-
-          result = CTexture::CreateTexture(nWidth, nHeight);
-          result->SetAlpha(false);
-          struct SwsContext* context =
-              sws_getContext(picture.iWidth, picture.iHeight, AV_PIX_FMT_YUV420P, nWidth, nHeight,
-                             AV_PIX_FMT_BGRA, SWS_FAST_BILINEAR, NULL, NULL, NULL);
-
-          if (context)
-          {
-            uint8_t* planes[YuvImage::MAX_PLANES];
-            int stride[YuvImage::MAX_PLANES];
-            picture.videoBuffer->GetPlanes(planes);
-            picture.videoBuffer->GetStrides(stride);
-            uint8_t* src[4] = {planes[0], planes[1], planes[2], 0};
-            int srcStride[] = {stride[0], stride[1], stride[2], 0};
-            uint8_t* dst[] = {result->GetPixels(), 0, 0, 0};
-            int dstStride[] = {static_cast<int>(result->GetPitch()), 0, 0, 0};
-            result->SetOrientation(DegreeToOrientation(hint.orientation));
-            sws_scale(context, src, srcStride, 0, picture.iHeight, dst, dstStride);
-            sws_freeContext(context);
-          }
+          const unsigned int maxWidth =
+              CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_imageRes;
+          result = CreateTextureFromPicture(picture, hint, maxWidth, 0);
         }
         else
         {
@@ -497,4 +736,3 @@ bool CDVDFileInfo::AddExternalSubtitleToDetails(const std::string &path, CStream
 
   return true;
 }
-
