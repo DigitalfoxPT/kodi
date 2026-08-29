@@ -265,15 +265,15 @@ bool CPlayerGUIInfo::GetLabel(std::string& value, const CFileItem *item, int con
     case PLAYER_SEEKPREVIEW:
 #if defined(TARGET_ANDROID)
     {
-      if (!item || !m_appPlayer->IsPlayingVideo())
+      const CSeekHandler& seekHandler = m_appPlayer->GetSeekHandler();
+      if (!item || !m_appPlayer->IsPlayingVideo() || !seekHandler.IsSeekPreviewActive())
         return false;
 
       // Use ten-second buckets so repeated remote-control presses reuse the same
       // cached image instead of decoding and storing a frame for every second.
       constexpr int PREVIEW_INTERVAL_SECONDS = 10;
       const int totalSeconds = GetTotalPlayTime();
-      int targetSeconds = std::lrint(g_application.GetTime()) +
-                          m_appPlayer->GetSeekHandler().GetSeekSize();
+      int targetSeconds = seekHandler.GetSeekPreviewTime();
       targetSeconds = std::clamp(targetSeconds, 0, std::max(0, totalSeconds - 1));
       targetSeconds = (targetSeconds / PREVIEW_INTERVAL_SECONDS) * PREVIEW_INTERVAL_SECONDS;
 
