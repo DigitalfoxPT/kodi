@@ -21,27 +21,6 @@
 				<texture flipy="true">frame/osdfade.png</texture>
 			</control>
 			<control type="group">
-				<centerleft>50%</centerleft>
-				<top>-300</top>
-				<width>500</width>
-				<height>281</height>
-				<visible>Window.IsActive(fullscreenvideo) + !VideoPlayer.Content(LiveTV) + [Player.Seeking | Player.HasPerformedSeek(3) | Player.Forwarding | Player.Rewinding] + !String.IsEmpty(Player.SeekPreview)</visible>
-				<animation effect="fade" time="150">VisibleChange</animation>
-				<control type="image">
-					<left>-6</left>
-					<top>-6</top>
-					<width>512</width>
-					<height>293</height>
-					<texture border="10" colordiffuse="CC000000">colors/white.png</texture>
-				</control>
-				<control type="image">
-					<width>500</width>
-					<height>281</height>
-					<aspectratio align="center" aligny="center">keep</aspectratio>
-					<texture background="true">$INFO[Player.SeekPreview]</texture>
-				</control>
-			</control>
-			<control type="group">
 				<visible>!Window.IsVisible(videoosd) + !Window.IsVisible(musicosd)</visible>
 				<animation effect="fade" time="200">VisibleChange</animation>
 				<control type="grouplist">
