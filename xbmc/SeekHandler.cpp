@@ -197,6 +197,7 @@ int CSeekHandler::GetSeekSize() const
 
 bool CSeekHandler::IsSeekPreviewActive() const
 {
+  std::unique_lock<CCriticalSection> lock(m_critSection);
   constexpr float SEEK_PREVIEW_DURATION_MS = 5000.0f;
   return m_seekPreviewTimer.IsRunning() &&
          m_seekPreviewTimer.GetElapsedMilliseconds() < SEEK_PREVIEW_DURATION_MS;
@@ -204,6 +205,7 @@ bool CSeekHandler::IsSeekPreviewActive() const
 
 int CSeekHandler::GetSeekPreviewTime() const
 {
+  std::unique_lock<CCriticalSection> lock(m_critSection);
   return m_seekPreviewTime;
 }
 
@@ -303,11 +305,29 @@ bool CSeekHandler::OnAction(const CAction &action)
     case ACTION_SMALL_STEP_BACK:
     case ACTION_STEP_BACK:
     {
+#if defined(TARGET_ANDROID)
+      // This Android TV build deliberately uses one predictable seek distance.
+      // Every left press seeks exactly ten seconds and never escalates to the
+      // configured 20/30/60 second steps after repeated presses.
+      if (type == SEEK_TYPE_VIDEO)
+      {
+        SeekSeconds(-10);
+        return true;
+      }
+#endif
       Seek(false, action.GetAmount(), action.GetRepeat(), false, type);
       return true;
     }
     case ACTION_STEP_FORWARD:
     {
+#if defined(TARGET_ANDROID)
+      // Match the backward action above: one remote press is always +10s.
+      if (type == SEEK_TYPE_VIDEO)
+      {
+        SeekSeconds(10);
+        return true;
+      }
+#endif
       Seek(true, action.GetAmount(), action.GetRepeat(), false, type);
       return true;
     }
