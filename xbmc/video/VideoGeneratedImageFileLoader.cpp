@@ -59,7 +59,10 @@ void SetupRarOptions(CFileItem& item, const std::string& path)
 } // namespace
 
 std::unique_ptr<CTexture> VIDEO::CVideoGeneratedImageFileLoader::Load(
-    const std::string& specialType, const std::string& filePath, unsigned int, unsigned int) const
+    const std::string& specialType,
+    const std::string& filePath,
+    unsigned int preferredWidth,
+    unsigned int preferredHeight) const
 {
   const bool seekPreview = StringUtils::StartsWith(specialType, "videoseek_");
   if (!seekPreview && !CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
