@@ -81,5 +81,5 @@ private:
   int m_timeCodeStamp[6];
   int m_timeCodePosition;
 
-  CCriticalSection m_critSection;
+  mutable CCriticalSection m_critSection;
 };
