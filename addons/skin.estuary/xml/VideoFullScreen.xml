@@ -2,6 +2,31 @@
 <window>
 	<defaultcontrol></defaultcontrol>
 	<controls>
+		<!-- Keep the seek preview in the always-active fullscreen window. This makes it
+		     independent of DialogSeekBar, so remote skip/rewind actions show a frame
+		     even when Estuary does not open the progress bar. -->
+		<control type="group">
+			<depth>DepthOSD+</depth>
+			<centerleft>50%</centerleft>
+			<bottom>230</bottom>
+			<width>500</width>
+			<height>281</height>
+			<visible>!VideoPlayer.Content(LiveTV) + [Player.Seeking | Player.HasPerformedSeek(3) | Player.Forwarding | Player.Rewinding] + !String.IsEmpty(Player.SeekPreview)</visible>
+			<animation effect="fade" time="150">VisibleChange</animation>
+			<control type="image">
+				<left>-6</left>
+				<top>-6</top>
+				<width>512</width>
+				<height>293</height>
+				<texture border="10" colordiffuse="CC000000">colors/white.png</texture>
+			</control>
+			<control type="image">
+				<width>500</width>
+				<height>281</height>
+				<aspectratio align="center" aligny="center">keep</aspectratio>
+				<texture background="true">$INFO[Player.SeekPreview]</texture>
+			</control>
+		</control>
 		<control type="group" id="0">
 			<control type="label" id="10">
 				<left>45</left>
