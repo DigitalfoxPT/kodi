@@ -269,12 +269,13 @@ bool CPlayerGUIInfo::GetLabel(std::string& value, const CFileItem *item, int con
       if (!item || !m_appPlayer->IsPlayingVideo() || !seekHandler.IsSeekPreviewActive())
         return false;
 
-      const int totalSeconds = GetTotalPlayTime();
-      int targetSeconds = seekHandler.GetSeekPreviewTime();
-      targetSeconds = std::clamp(targetSeconds, 0, std::max(0, totalSeconds - 1));
+      const int64_t totalTimeMs = m_appPlayer->GetTotalTime();
+      int64_t targetTimeMs = seekHandler.GetSeekPreviewTimeMs();
+      targetTimeMs =
+          std::clamp(targetTimeMs, int64_t{0}, std::max(int64_t{0}, totalTimeMs - 1));
 
       value = CTextureUtils::GetWrappedImageURL(
-          item->GetDynPath(), StringUtils::Format("videoseek_{}", targetSeconds));
+          item->GetDynPath(), StringUtils::Format("videoseek_{}", targetTimeMs));
       return true;
     }
 #else

@@ -13,6 +13,7 @@
 #include "threads/CriticalSection.h"
 #include "utils/Stopwatch.h"
 
+#include <cstdint>
 #include <map>
 #include <utility>
 #include <vector>
@@ -48,7 +49,7 @@ public:
   int GetSeekSize() const;
   bool InProgress() const;
   bool IsSeekPreviewActive() const;
-  int GetSeekPreviewTime() const;
+  int64_t GetSeekPreviewTimeMs() const;
 
   bool HasTimeCode() const { return m_timeCodePosition > 0; }
   int GetTimeCodeSeconds() const;
@@ -64,6 +65,9 @@ private:
 
   void SetSeekSize(double seekSize);
   int GetSeekStepSize(SeekType type, int step);
+  void SeekPreviewSeconds(int seconds);
+  bool CommitSeekPreview();
+  bool CancelSeekPreview();
 
   int m_seekDelay = 500;
   std::map<SeekType, int > m_seekDelays;
@@ -75,8 +79,8 @@ private:
   std::map<SeekType, std::vector<int> > m_forwardSeekSteps;
   std::map<SeekType, std::vector<int> > m_backwardSeekSteps;
   CStopWatch m_timer;
-  CStopWatch m_seekPreviewTimer;
-  int m_seekPreviewTime{0};
+  bool m_seekPreviewPending{false};
+  int64_t m_seekPreviewTimeMs{0};
   CStopWatch m_timerTimeCode;
   int m_timeCodeStamp[6];
   int m_timeCodePosition;

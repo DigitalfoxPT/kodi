@@ -58,6 +58,7 @@ void CApplicationPlayer::ResetPlayer()
 void CApplicationPlayer::CloseFile(bool reopen)
 {
 #if defined(TARGET_ANDROID)
+  m_seekHandler.Reset();
   CDVDFileInfo::ResetSeekPreview();
 #endif
   std::shared_ptr<IPlayer> player = GetInternal();
@@ -151,6 +152,7 @@ bool CApplicationPlayer::OpenFile(const CFileItem& item, const CPlayerOptions& o
 #if defined(TARGET_ANDROID)
   // A preview session belongs to exactly one playing item. Reset it for
   // seamless playlist transitions that do not pass through CloseFile().
+  m_seekHandler.Reset();
   CDVDFileInfo::ResetSeekPreview();
 #endif
   bool ret = player->OpenFile(item, options);

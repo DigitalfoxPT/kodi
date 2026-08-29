@@ -6,7 +6,7 @@
 	<controls>
 		<control type="group">
 			<centerleft>50%</centerleft>
-			<bottom>230</bottom>
+			<bottom>150</bottom>
 			<width>500</width>
 			<height>281</height>
 			<animation effect="fade" time="150">VisibleChange</animation>

@@ -25,6 +25,7 @@
 #include "DVDInputStreams/DVDInputStreamBluray.h"
 #endif
 #include "DVDInputStreams/DVDFactoryInputStream.h"
+#include "Interface/TimingConstants.h"
 #include "DVDDemuxers/DVDDemux.h"
 #include "DVDDemuxers/DVDDemuxUtils.h"
 #include "DVDDemuxers/DVDFactoryDemuxer.h"
@@ -165,7 +166,7 @@ public:
     // Seek backwards to a keyframe, exactly as a dedicated preview player would.
     // Resetting only the codec keeps the SMB input and demuxer alive between requests.
     m_videoCodec->Reset();
-    m_videoCodec->SetCodecControl(DVD_CODEC_CTRL_DROP_ANY | DVD_CODEC_CTRL_NO_POSTPROC);
+    m_videoCodec->SetCodecControl(DVD_CODEC_CTRL_NO_POSTPROC);
     if (!m_demuxer->SeekTime(static_cast<double>(targetMs), true))
     {
       CLog::Log(LOGWARNING, "Seek preview session: seek to {}ms failed in {}", targetMs,
@@ -201,6 +202,21 @@ public:
       if (decoderState == CDVDVideoCodec::VC_PICTURE &&
           !(picture.iFlags & DVP_FLAG_DROPPED))
       {
+        const double picturePts =
+            picture.pts != DVD_NOPTS_VALUE ? picture.pts : picture.dts;
+        const int64_t pictureTimeMs = picturePts != DVD_NOPTS_VALUE
+                                          ? DVD_TIME_TO_MSEC(picturePts)
+                                          : targetMs;
+
+        // The demuxer seeks to the preceding keyframe. Decode through that
+        // keyframe interval so the preview is the first frame at or after the
+        // same absolute target that OK will send to the main player.
+        if (pictureTimeMs < targetMs)
+        {
+          picture.Reset();
+          continue;
+        }
+
         const unsigned int maxWidth =
             preferredWidth > 0 ? std::min(preferredWidth, SEEK_PREVIEW_MAX_WIDTH)
                                : SEEK_PREVIEW_MAX_WIDTH;
@@ -208,9 +224,11 @@ public:
             CreateTextureFromPicture(picture, m_hint, maxWidth, preferredHeight);
         const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - start);
-        CLog::Log(LOGINFO,
-                  "Seek preview session: decoded {}ms in {}ms after {} packets (decoder reused)",
-                  targetMs, elapsed.count(), packetsTried);
+        CLog::Log(
+            LOGINFO,
+            "Seek preview session: decoded frame {}ms for target {}ms in {}ms after {} packets "
+            "(decoder reused)",
+            pictureTimeMs, targetMs, elapsed.count(), packetsTried);
         return texture;
       }
 

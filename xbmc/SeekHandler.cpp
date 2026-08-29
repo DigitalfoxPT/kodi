@@ -30,6 +30,7 @@
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
 
+#include <algorithm>
 #include <cmath>
 #include <mutex>
 #include <stdlib.h>
@@ -43,8 +44,6 @@ CSeekHandler::~CSeekHandler()
 
 void CSeekHandler::Configure()
 {
-  m_seekPreviewTimer.Stop();
-  m_seekPreviewTime = 0;
   Reset();
 
   const std::shared_ptr<CSettings> settings = CServiceBroker::GetSettingsComponent()->GetSettings();
@@ -87,6 +86,8 @@ void CSeekHandler::Reset()
   m_seekStep = 0;
   m_seekSize = 0;
   m_timeCodePosition = 0;
+  m_seekPreviewPending = false;
+  m_seekPreviewTimeMs = 0;
 }
 
 int CSeekHandler::GetSeekStepSize(SeekType type, int step)
@@ -192,21 +193,39 @@ void CSeekHandler::SeekSeconds(int seconds)
 
 int CSeekHandler::GetSeekSize() const
 {
-  return MathUtils::round_int(m_seekSize);
+  bool previewPending = false;
+  int64_t previewTimeMs = 0;
+  double seekSize = 0.0;
+  {
+    std::unique_lock<CCriticalSection> lock(m_critSection);
+    previewPending = m_seekPreviewPending;
+    previewTimeMs = m_seekPreviewTimeMs;
+    seekSize = m_seekSize;
+  }
+
+#if defined(TARGET_ANDROID)
+  if (previewPending)
+  {
+    const auto& components = CServiceBroker::GetAppComponents();
+    const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+    return MathUtils::round_int(
+        static_cast<double>(previewTimeMs - appPlayer->GetTime()) / 1000.0);
+  }
+#endif
+
+  return MathUtils::round_int(seekSize);
 }
 
 bool CSeekHandler::IsSeekPreviewActive() const
 {
   std::unique_lock<CCriticalSection> lock(m_critSection);
-  constexpr float SEEK_PREVIEW_DURATION_MS = 5000.0f;
-  return m_seekPreviewTimer.IsRunning() &&
-         m_seekPreviewTimer.GetElapsedMilliseconds() < SEEK_PREVIEW_DURATION_MS;
+  return m_seekPreviewPending;
 }
 
-int CSeekHandler::GetSeekPreviewTime() const
+int64_t CSeekHandler::GetSeekPreviewTimeMs() const
 {
   std::unique_lock<CCriticalSection> lock(m_critSection);
-  return m_seekPreviewTime;
+  return m_seekPreviewTimeMs;
 }
 
 void CSeekHandler::SetSeekSize(double seekSize)
@@ -220,9 +239,64 @@ void CSeekHandler::SetSeekSize(double seekSize)
   m_seekSize = seekSize > 0
     ? std::min(seekSize, maxSeekSize)
     : std::max(seekSize, minSeekSize);
+}
 
-  m_seekPreviewTime = MathUtils::round_int(playTime / 1000.0 + m_seekSize);
-  m_seekPreviewTimer.StartZero();
+void CSeekHandler::SeekPreviewSeconds(int seconds)
+{
+  const auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+  const int64_t playTimeMs = appPlayer->GetTime();
+  const int64_t minTimeMs = appPlayer->GetMinTime();
+  const int64_t maxTimeMs = std::max(minTimeMs, appPlayer->GetMaxTime() - 1);
+
+  int64_t targetTimeMs = 0;
+  {
+    std::unique_lock<CCriticalSection> lock(m_critSection);
+    const int64_t baseTimeMs = m_seekPreviewPending ? m_seekPreviewTimeMs : playTimeMs;
+    targetTimeMs =
+        std::clamp(baseTimeMs + static_cast<int64_t>(seconds) * 1000, minTimeMs, maxTimeMs);
+
+    m_seekPreviewPending = true;
+    m_seekPreviewTimeMs = targetTimeMs;
+    m_seekSize = static_cast<double>(targetTimeMs - playTimeMs) / 1000.0;
+    m_seekChanged = true;
+  }
+
+  CLog::Log(LOGINFO, "Seek preview: selected {}ms ({}s step, waiting for OK)", targetTimeMs,
+            seconds);
+}
+
+bool CSeekHandler::CommitSeekPreview()
+{
+  int64_t targetTimeMs = 0;
+  {
+    std::unique_lock<CCriticalSection> lock(m_critSection);
+    if (!m_seekPreviewPending)
+      return false;
+
+    targetTimeMs = m_seekPreviewTimeMs;
+    Reset();
+    m_seekChanged = true;
+  }
+
+  CLog::Log(LOGINFO, "Seek preview: confirmed {}ms with OK", targetTimeMs);
+  g_application.SeekTime(static_cast<double>(targetTimeMs) / 1000.0);
+  return true;
+}
+
+bool CSeekHandler::CancelSeekPreview()
+{
+  {
+    std::unique_lock<CCriticalSection> lock(m_critSection);
+    if (!m_seekPreviewPending)
+      return false;
+
+    Reset();
+    m_seekChanged = true;
+  }
+
+  CLog::Log(LOGINFO, "Seek preview: cancelled, playback position unchanged");
+  return true;
 }
 
 bool CSeekHandler::InProgress() const
@@ -297,6 +371,23 @@ bool CSeekHandler::OnAction(const CAction &action)
 
   SeekType type = g_application.CurrentFileItem().IsAudio() ? SEEK_TYPE_MUSIC : SEEK_TYPE_VIDEO;
 
+#if defined(TARGET_ANDROID)
+  if (type == SEEK_TYPE_VIDEO && IsSeekPreviewActive())
+  {
+    switch (action.GetID())
+    {
+      case ACTION_SELECT_ITEM:
+        return CommitSeekPreview();
+      case ACTION_NAV_BACK:
+      case ACTION_PREVIOUS_MENU:
+      case ACTION_PARENT_DIR:
+        return CancelSeekPreview();
+      default:
+        break;
+    }
+  }
+#endif
+
   if (SeekTimeCode(action))
     return true;
 
@@ -306,12 +397,12 @@ bool CSeekHandler::OnAction(const CAction &action)
     case ACTION_STEP_BACK:
     {
 #if defined(TARGET_ANDROID)
-      // This Android TV build deliberately uses one predictable seek distance.
-      // Every left press seeks exactly ten seconds and never escalates to the
-      // configured 20/30/60 second steps after repeated presses.
+      // This Android TV build deliberately uses one predictable preview step.
+      // Every left press selects exactly ten seconds earlier without seeking
+      // until the user confirms the selected frame with OK.
       if (type == SEEK_TYPE_VIDEO)
       {
-        SeekSeconds(-10);
+        SeekPreviewSeconds(-10);
         return true;
       }
 #endif
@@ -321,10 +412,10 @@ bool CSeekHandler::OnAction(const CAction &action)
     case ACTION_STEP_FORWARD:
     {
 #if defined(TARGET_ANDROID)
-      // Match the backward action above: one remote press is always +10s.
+      // Match the backward action above: one press selects exactly +10s.
       if (type == SEEK_TYPE_VIDEO)
       {
-        SeekSeconds(10);
+        SeekPreviewSeconds(10);
         return true;
       }
 #endif

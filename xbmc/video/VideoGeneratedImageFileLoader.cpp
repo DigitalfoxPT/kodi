@@ -81,7 +81,7 @@ std::unique_ptr<CTexture> VIDEO::CVideoGeneratedImageFileLoader::Load(
   {
     try
     {
-      seekTimeMs = std::stoll(specialType.substr(10)) * 1000;
+      seekTimeMs = std::stoll(specialType.substr(10));
     }
     catch (...)
     {
@@ -102,7 +102,7 @@ std::unique_ptr<CTexture> VIDEO::CVideoGeneratedImageFileLoader::Load(
     const auto appPlayer = components.GetComponent<CApplicationPlayer>();
     const CSeekHandler& seekHandler = appPlayer->GetSeekHandler();
     const int64_t totalTimeMs = appPlayer->GetTotalTime();
-    int64_t currentTargetMs = static_cast<int64_t>(seekHandler.GetSeekPreviewTime()) * 1000;
+    int64_t currentTargetMs = seekHandler.GetSeekPreviewTimeMs();
     currentTargetMs =
         std::clamp(currentTargetMs, int64_t{0}, std::max(int64_t{0}, totalTimeMs - 1));
     if (!appPlayer->IsPlayingVideo() || !seekHandler.IsSeekPreviewActive() ||
@@ -121,7 +121,7 @@ std::unique_ptr<CTexture> VIDEO::CVideoGeneratedImageFileLoader::Load(
 
     // A slow first SMB seek can finish after the user has already pressed the
     // remote again. Never publish that obsolete frame over the newest target.
-    int64_t latestTargetMs = static_cast<int64_t>(seekHandler.GetSeekPreviewTime()) * 1000;
+    int64_t latestTargetMs = seekHandler.GetSeekPreviewTimeMs();
     latestTargetMs =
         std::clamp(latestTargetMs, int64_t{0}, std::max(int64_t{0}, appPlayer->GetTotalTime() - 1));
     if (!appPlayer->IsPlayingVideo() || !seekHandler.IsSeekPreviewActive() ||

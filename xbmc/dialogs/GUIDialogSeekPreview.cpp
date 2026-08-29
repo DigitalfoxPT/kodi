@@ -8,6 +8,10 @@
 
 #include "GUIDialogSeekPreview.h"
 
+#include "ServiceBroker.h"
+#include "application/ApplicationComponents.h"
+#include "application/ApplicationPlayer.h"
+
 CGUIDialogSeekPreview::CGUIDialogSeekPreview()
   : CGUIDialog(WINDOW_DIALOG_SEEK_PREVIEW, "DialogSeekPreview.xml", DialogModalityType::MODELESS)
 {
@@ -17,9 +21,15 @@ CGUIDialogSeekPreview::CGUIDialogSeekPreview()
   m_loadType = LOAD_ON_GUI_INIT;
 }
 
-bool CGUIDialogSeekPreview::OnAction(const CAction& /*action*/)
+bool CGUIDialogSeekPreview::OnAction(const CAction& action)
 {
-  // This is a visual-only overlay. Let all remote-control actions continue to
-  // the fullscreen player underneath it.
+  // Once the preview is visible, route remote actions to the seek handler
+  // before the fullscreen window or OSD can consume OK/Back. Unsupported
+  // actions still fall through to the normal fullscreen player.
+  const auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+  if (appPlayer->GetSeekHandler().IsSeekPreviewActive())
+    return appPlayer->GetSeekHandler().OnAction(action);
+
   return false;
 }
