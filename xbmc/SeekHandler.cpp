@@ -236,21 +236,31 @@ void CSeekHandler::SeekPreviewSeconds(int seconds)
   {
     std::unique_lock<CCriticalSection> lock(m_critSection);
     constexpr int64_t previewIntervalMs = 10'000;
-    int64_t baseTimeMs = m_seekPreviewTimeMs;
     if (!m_seekPreviewPending)
     {
       // Use stable ten-second timeline markers. The same exact markers are
       // generated while the video library is updated, so a cached image and
-      // the position confirmed with OK can never differ.
-      baseTimeMs = ((playTimeMs + previewIntervalMs / 2) / previewIntervalMs) *
-                   previewIntervalMs;
+      // the position confirmed with OK can never differ. The first press goes
+      // to the next marker in that direction; later presses move exactly 10s.
+      if (seconds > 0)
+        targetTimeMs = (playTimeMs / previewIntervalMs + 1) * previewIntervalMs;
+      else
+        targetTimeMs =
+            playTimeMs > minTimeMs
+                ? ((playTimeMs - 1) / previewIntervalMs) * previewIntervalMs
+                : minTimeMs;
+
       pausePlayback = appPlayer->CanPause() && !appPlayer->IsPaused();
       m_seekPreviewResumePlayback = pausePlayback;
     }
+    else
+    {
+      targetTimeMs = m_seekPreviewTimeMs + static_cast<int64_t>(seconds) * 1000;
+    }
 
-    targetTimeMs = std::clamp(baseTimeMs + static_cast<int64_t>(seconds) * 1000,
+    targetTimeMs = std::clamp(targetTimeMs, minTimeMs, maxTimeMs);
+    targetTimeMs = std::clamp((targetTimeMs / previewIntervalMs) * previewIntervalMs,
                               minTimeMs, maxTimeMs);
-    targetTimeMs = (targetTimeMs / previewIntervalMs) * previewIntervalMs;
 
     m_seekPreviewPending = true;
     m_seekPreviewTimeMs = targetTimeMs;
