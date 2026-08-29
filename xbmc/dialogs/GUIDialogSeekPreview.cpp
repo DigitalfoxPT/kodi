@@ -26,7 +26,7 @@ bool CGUIDialogSeekPreview::OnAction(const CAction& action)
   // Once the preview is visible, route remote actions to the seek handler
   // before the fullscreen window or OSD can consume OK/Back. Unsupported
   // actions still fall through to the normal fullscreen player.
-  const auto& components = CServiceBroker::GetAppComponents();
+  auto& components = CServiceBroker::GetAppComponents();
   const auto appPlayer = components.GetComponent<CApplicationPlayer>();
   if (appPlayer->GetSeekHandler().IsSeekPreviewActive())
     return appPlayer->GetSeekHandler().OnAction(action);
