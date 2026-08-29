@@ -95,6 +95,7 @@
 #include "dialogs/GUIDialogPlayerProcessInfo.h"
 #include "dialogs/GUIDialogProgress.h"
 #include "dialogs/GUIDialogSeekBar.h"
+#include "dialogs/GUIDialogSeekPreview.h"
 #include "dialogs/GUIDialogSelect.h"
 #include "dialogs/GUIDialogSmartPlaylistEditor.h"
 #include "dialogs/GUIDialogSmartPlaylistRule.h"
@@ -208,6 +209,7 @@ void CGUIWindowManager::CreateWindows()
   Add(new CGUIDialogKeyboardTouch);
   Add(new CGUIDialogVolumeBar);
   Add(new CGUIDialogSeekBar);
+  Add(new CGUIDialogSeekPreview);
   Add(new CGUIDialogSubMenu);
   Add(new CGUIDialogContextMenu);
   Add(new CGUIDialogKaiToast);
@@ -460,6 +462,7 @@ bool CGUIWindowManager::DestroyWindows()
 
     Remove(WINDOW_DIALOG_KAI_TOAST);
     Remove(WINDOW_DIALOG_SEEK_BAR);
+    Remove(WINDOW_DIALOG_SEEK_PREVIEW);
     Remove(WINDOW_DIALOG_VOLUME_BAR);
 
     DestroyWindow(WINDOW_EVENT_LOG);
