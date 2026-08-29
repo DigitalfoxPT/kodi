@@ -11,7 +11,7 @@
 			<bottom>230</bottom>
 			<width>500</width>
 			<height>281</height>
-			<visible>!VideoPlayer.Content(LiveTV) + [Player.Seeking | Player.HasPerformedSeek(3) | Player.Forwarding | Player.Rewinding] + !String.IsEmpty(Player.SeekPreview)</visible>
+			<visible>!VideoPlayer.Content(LiveTV) + !String.IsEmpty(Player.SeekPreview)</visible>
 			<animation effect="fade" time="150">VisibleChange</animation>
 			<control type="image">
 				<left>-6</left>
