@@ -43,6 +43,8 @@ CSeekHandler::~CSeekHandler()
 
 void CSeekHandler::Configure()
 {
+  m_seekPreviewTimer.Stop();
+  m_seekPreviewTime = 0;
   Reset();
 
   const std::shared_ptr<CSettings> settings = CServiceBroker::GetSettingsComponent()->GetSettings();
@@ -178,6 +180,7 @@ void CSeekHandler::SeekSeconds(int seconds)
 
   std::unique_lock<CCriticalSection> lock(m_critSection);
   SetSeekSize(seconds);
+  m_seekChanged = true;
 
   // perform relative seek
   auto& components = CServiceBroker::GetAppComponents();
@@ -192,6 +195,18 @@ int CSeekHandler::GetSeekSize() const
   return MathUtils::round_int(m_seekSize);
 }
 
+bool CSeekHandler::IsSeekPreviewActive() const
+{
+  constexpr float SEEK_PREVIEW_DURATION_MS = 5000.0f;
+  return m_seekPreviewTimer.IsRunning() &&
+         m_seekPreviewTimer.GetElapsedMilliseconds() < SEEK_PREVIEW_DURATION_MS;
+}
+
+int CSeekHandler::GetSeekPreviewTime() const
+{
+  return m_seekPreviewTime;
+}
+
 void CSeekHandler::SetSeekSize(double seekSize)
 {
   const auto& components = CServiceBroker::GetAppComponents();
@@ -203,6 +218,9 @@ void CSeekHandler::SetSeekSize(double seekSize)
   m_seekSize = seekSize > 0
     ? std::min(seekSize, maxSeekSize)
     : std::max(seekSize, minSeekSize);
+
+  m_seekPreviewTime = MathUtils::round_int(playTime / 1000.0 + m_seekSize);
+  m_seekPreviewTimer.StartZero();
 }
 
 bool CSeekHandler::InProgress() const
