@@ -19,6 +19,7 @@ set(SOURCES GUIDialogBoxBase.cpp
             GUIDialogPlayerProcessInfo.cpp
             GUIDialogProgress.cpp
             GUIDialogSeekBar.cpp
+            GUIDialogSeekPreview.cpp
             GUIDialogSelect.cpp
             GUIDialogSimpleMenu.cpp
             GUIDialogSlider.cpp
@@ -50,6 +51,7 @@ set(HEADERS GUIDialogBoxBase.h
             GUIDialogPlayerProcessInfo.h
             GUIDialogProgress.h
             GUIDialogSeekBar.h
+            GUIDialogSeekPreview.h
             GUIDialogSelect.h
             GUIDialogSimpleMenu.h
             GUIDialogSlider.h
