@@ -47,6 +47,8 @@ public:
 
   int GetSeekSize() const;
   bool InProgress() const;
+  bool IsSeekPreviewActive() const;
+  int GetSeekPreviewTime() const;
 
   bool HasTimeCode() const { return m_timeCodePosition > 0; }
   int GetTimeCodeSeconds() const;
@@ -73,6 +75,8 @@ private:
   std::map<SeekType, std::vector<int> > m_forwardSeekSteps;
   std::map<SeekType, std::vector<int> > m_backwardSeekSteps;
   CStopWatch m_timer;
+  CStopWatch m_seekPreviewTimer;
+  int m_seekPreviewTime{0};
   CStopWatch m_timerTimeCode;
   int m_timeCodeStamp[6];
   int m_timeCodePosition;
