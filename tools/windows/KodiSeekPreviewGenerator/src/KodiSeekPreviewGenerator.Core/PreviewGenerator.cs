@@ -103,7 +103,7 @@ public sealed class PreviewGenerator
                     percent => progress?.Report(new GenerationProgress(
                         index,
                         videos.Count,
-                        $"A gerar ({percent}%): {relativePath}",
+                        $"A gerar: {relativePath}",
                         videoPath,
                         percent)),
                     cancellationToken);

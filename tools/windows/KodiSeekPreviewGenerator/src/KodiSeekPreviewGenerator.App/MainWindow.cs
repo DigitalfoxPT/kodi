@@ -217,7 +217,7 @@ public sealed class MainWindow : Window
                         : Path.GetFileName(update.CurrentVideo);
                     _currentVideoProgressTextBlock.Text = $"Vídeo atual: {percent}% — {videoName}";
                     SetStatus(InfoBarSeverity.Informational,
-                        $"A trabalhar — {percent}%", update.Message);
+                        "A trabalhar", update.Message);
                     return;
                 }
 
