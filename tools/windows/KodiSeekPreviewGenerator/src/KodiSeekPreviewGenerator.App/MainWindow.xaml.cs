@@ -18,6 +18,10 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         LogList.ItemsSource = LogMessages;
+        RootLayout.Loaded += RootLayout_Loaded;
+        BrowseButton.Click += BrowseButton_Click;
+        GenerateButton.Click += GenerateButton_Click;
+        CancelButton.Click += CancelButton_Click;
         string? lastFolder = AppSettings.LoadLastFolder();
         if (!string.IsNullOrWhiteSpace(lastFolder) && Directory.Exists(lastFolder))
             FolderPathBox.Text = lastFolder;
@@ -128,9 +132,8 @@ public sealed partial class MainWindow : Window
 
     private void SetStatus(InfoBarSeverity severity, string title, string message)
     {
-        StatusInfoBar.Severity = severity;
-        StatusInfoBar.Title = title;
-        StatusInfoBar.Message = message;
-        StatusInfoBar.IsOpen = true;
+        _ = severity;
+        StatusTitleTextBlock.Text = title;
+        StatusMessageTextBlock.Text = message;
     }
 }
