@@ -43,7 +43,11 @@ internal sealed class FfmpegRunner
             "-map", "0:v:0",
             "-an",
             "-sn",
-            "-vf", "fps=fps=1/10:start_time=0:round=near,scale='min(480,iw)':-2:flags=lanczos",
+            // Pick the first decoded frame in every absolute ten-second bucket.
+            // The fps filter selects the frame nearest the middle of each bucket,
+            // which made a preview labelled 00:30 contain a frame around 00:35.
+            "-vf", "setpts=PTS-STARTPTS,select='isnan(prev_selected_t)+gt(floor(t/10),floor(prev_selected_t/10))',scale='min(480,iw)':-2:flags=lanczos",
+            "-fps_mode", "vfr",
             "-q:v", "4",
             "-start_number", "0",
             outputPattern,

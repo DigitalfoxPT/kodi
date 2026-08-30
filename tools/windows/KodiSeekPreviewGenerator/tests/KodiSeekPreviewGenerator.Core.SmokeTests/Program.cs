@@ -20,6 +20,8 @@ try
         "The BIF image count must be two.");
     Assert(BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(16, 4)) == 10_000,
         "The timestamp multiplier must represent ten seconds.");
+    Assert(bytes.AsSpan(20, 5).SequenceEqual("KSPG2"u8),
+        "The BIF must contain the exact-frame generator revision marker.");
     Assert(BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(64, 4)) == 0,
         "The first image timestamp must be zero.");
     Assert(BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(72, 4)) == 1,
@@ -27,6 +29,12 @@ try
     Assert(BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(80, 4)) == uint.MaxValue,
         "The final index entry must be the BIF sentinel.");
 
+    bytes.AsSpan(20, 5).Clear();
+    await File.WriteAllBytesAsync(bif, bytes);
+    Assert(!BifFile.IsValid(bif),
+        "A BIF from the older midpoint-frame generator must be regenerated.");
+
+    "KSPG2"u8.CopyTo(bytes.AsSpan(20, 5));
     bytes[0] = 0;
     await File.WriteAllBytesAsync(bif, bytes);
     Assert(!BifFile.IsValid(bif), "A corrupted BIF magic value must be rejected.");

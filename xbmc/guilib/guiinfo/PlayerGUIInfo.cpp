@@ -69,6 +69,16 @@ float CPlayerGUIInfo::GetSeekPercent() const
   if (iTotal == 0)
     return 0.0f;
 
+#if defined(TARGET_ANDROID)
+  const CSeekHandler& seekHandler = m_appPlayer->GetSeekHandler();
+  if (seekHandler.IsSeekPreviewActive())
+  {
+    const float previewSeconds =
+        static_cast<float>(seekHandler.GetSeekPreviewTimeMs()) / 1000.0f;
+    return std::clamp(previewSeconds * 100.0f / static_cast<float>(iTotal), 0.0f, 100.0f);
+  }
+#endif
+
   float fPercentPlayTime = static_cast<float>(GetPlayTime() * 1000) / iTotal * 0.1f;
   float fPercentPerSecond = 100.0f / static_cast<float>(iTotal);
   float fPercent =
@@ -113,6 +123,15 @@ std::string CPlayerGUIInfo::GetCurrentSeekTime(TIME_FORMAT format) const
 {
   if (format == TIME_FORMAT_GUESS && GetTotalPlayTime() >= 3600)
     format = TIME_FORMAT_HH_MM_SS;
+
+#if defined(TARGET_ANDROID)
+  const CSeekHandler& seekHandler = m_appPlayer->GetSeekHandler();
+  if (seekHandler.IsSeekPreviewActive())
+  {
+    return StringUtils::SecondsToTimeString(
+        static_cast<int>(seekHandler.GetSeekPreviewTimeMs() / 1000), format);
+  }
+#endif
 
   return StringUtils::SecondsToTimeString(
       g_application.GetTime() + m_appPlayer->GetSeekHandler().GetSeekSize(), format);

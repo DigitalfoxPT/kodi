@@ -7,8 +7,10 @@ public static class BifFile
     public const uint TimestampMultiplierMilliseconds = 10_000;
 
     private const int HeaderSize = 64;
+    private const int GeneratorMarkerOffset = 20;
     private const uint SentinelTimestamp = uint.MaxValue;
     private static readonly byte[] Magic = [0x89, 0x42, 0x49, 0x46, 0x0d, 0x0a, 0x1a, 0x0a];
+    private static readonly byte[] GeneratorMarker = "KSPG2"u8.ToArray();
 
     public static bool IsValid(string path)
     {
@@ -26,7 +28,10 @@ public static class BifFile
             uint version = BinaryPrimitives.ReadUInt32LittleEndian(header[8..12]);
             uint imageCount = BinaryPrimitives.ReadUInt32LittleEndian(header[12..16]);
             uint multiplier = BinaryPrimitives.ReadUInt32LittleEndian(header[16..20]);
-            if (version != 0 || imageCount == 0 || multiplier != TimestampMultiplierMilliseconds)
+            if (version != 0 || imageCount == 0 ||
+                multiplier != TimestampMultiplierMilliseconds ||
+                !header.Slice(GeneratorMarkerOffset, GeneratorMarker.Length)
+                    .SequenceEqual(GeneratorMarker))
                 return false;
 
             long indexSize = checked(((long)imageCount + 1) * 8);
@@ -85,6 +90,7 @@ public static class BifFile
         BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(12, 4), checked((uint)jpegPaths.Count));
         BinaryPrimitives.WriteUInt32LittleEndian(
             header.AsSpan(16, 4), TimestampMultiplierMilliseconds);
+        GeneratorMarker.CopyTo(header, GeneratorMarkerOffset);
         await output.WriteAsync(header, cancellationToken);
 
         byte[] entryBytes = new byte[8];

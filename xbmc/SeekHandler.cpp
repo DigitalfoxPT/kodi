@@ -374,7 +374,7 @@ bool CSeekHandler::CancelSeekPreview()
 
 bool CSeekHandler::InProgress() const
 {
-  return m_requireSeek || CServiceBroker::GetDataCacheCore().IsSeeking();
+  return IsSeekPreviewActive() || m_requireSeek || CServiceBroker::GetDataCacheCore().IsSeeking();
 }
 
 void CSeekHandler::FrameMove()
