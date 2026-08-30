@@ -10,7 +10,10 @@ namespace KodiSeekPreviewGenerator;
 
 public sealed class MainWindow : Window
 {
+    private const double CustomTitleBarHeight = 40;
+
     private readonly Grid _rootLayout;
+    private readonly Grid _appTitleBar;
     private readonly TextBox _folderPathBox;
     private readonly Button _browseButton;
     private readonly Button _generateButton;
@@ -42,27 +45,39 @@ public sealed class MainWindow : Window
             RequestedTheme = ElementTheme.Dark,
             Background = CreateBrush(10, 13, 18),
         };
+        _rootLayout.RowDefinitions.Add(
+            new RowDefinition { Height = new GridLength(CustomTitleBarHeight) });
+        _rootLayout.RowDefinitions.Add(
+            new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+        _appTitleBar = new Grid
+        {
+            Height = CustomTitleBarHeight,
+            Padding = new Thickness(12, 0, 12, 0),
+            Background = CreateBrush(24, 24, 24),
+        };
+        var titleBarContent = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 9,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        titleBarContent.Children.Add(CreateLogo(28, 7, 14));
+        titleBarContent.Children.Add(new TextBlock
+        {
+            Text = Title,
+            FontSize = 14,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        _appTitleBar.Children.Add(titleBarContent);
+        _rootLayout.Children.Add(_appTitleBar);
 
         var layout = new StackPanel { Spacing = 18 };
         var header = new Grid { ColumnSpacing = 16 };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        var logoContainer = new Border
-        {
-            Width = 62,
-            Height = 62,
-            CornerRadius = new CornerRadius(16),
-            Background = CreateBrush(15, 48, 78),
-            BorderBrush = CreateBrush(31, 105, 161),
-            BorderThickness = new Thickness(1),
-            Child = new FontIcon
-            {
-                Glyph = "\uE714",
-                FontSize = 30,
-                Foreground = CreateBrush(255, 255, 255),
-            },
-        };
+        var logoContainer = CreateLogo(62, 16, 30);
         header.Children.Add(logoContainer);
 
         var heading = new StackPanel
@@ -247,8 +262,11 @@ public sealed class MainWindow : Window
                 page.MaxWidth,
                 Math.Max(0, args.NewSize.Width - horizontalViewportMargin));
         };
+        Grid.SetRow(scroller, 1);
         _rootLayout.Children.Add(scroller);
         Content = _rootLayout;
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(_appTitleBar);
 
         _rootLayout.Loaded += RootLayout_Loaded;
         _browseButton.Click += BrowseButton_Click;
@@ -287,6 +305,30 @@ public sealed class MainWindow : Window
         titleBar.ButtonPressedForegroundColor = white;
         titleBar.ButtonInactiveBackgroundColor = background;
         titleBar.ButtonInactiveForegroundColor = lightGray;
+    }
+
+    private static Border CreateLogo(double size, double cornerRadius, double glyphSize)
+    {
+        return new Border
+        {
+            Width = size,
+            Height = size,
+            CornerRadius = new CornerRadius(cornerRadius),
+            Background = CreateBrush(15, 48, 78),
+            BorderBrush = CreateBrush(31, 105, 161),
+            BorderThickness = new Thickness(1),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new FontIcon
+            {
+                Glyph = "\uE714",
+                FontSize = glyphSize,
+                Foreground = CreateBrush(255, 255, 255),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                IsTextScaleFactorEnabled = false,
+            },
+        };
     }
 
     private static Button CreateButton(string text, string glyph, bool primary = false)
