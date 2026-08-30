@@ -229,7 +229,7 @@ public sealed class MainWindow : Window
         var page = new Grid
         {
             Padding = new Thickness(32, 28, 32, 36),
-            MaxWidth = 1120,
+            MaxWidth = 1680,
             HorizontalAlignment = HorizontalAlignment.Center,
         };
         page.Children.Add(layout);
