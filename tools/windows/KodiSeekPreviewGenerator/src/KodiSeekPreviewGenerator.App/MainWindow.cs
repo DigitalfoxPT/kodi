@@ -3,7 +3,6 @@ using KodiSeekPreviewGenerator.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 
@@ -55,12 +54,11 @@ public sealed class MainWindow : Window
             Background = CreateBrush(15, 48, 78),
             BorderBrush = CreateBrush(31, 105, 161),
             BorderThickness = new Thickness(1),
-            Child = new Image
+            Child = new FontIcon
             {
-                Width = 46,
-                Height = 46,
-                Source = new BitmapImage(
-                    new Uri("ms-appx:///Assets/KodiSeekPreviewGenerator.png")),
+                Glyph = "\uE714",
+                FontSize = 30,
+                Foreground = CreateBrush(117, 198, 255),
             },
         };
         header.Children.Add(logoContainer);
