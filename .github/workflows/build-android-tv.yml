@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - android-tv-seek-preview
+    paths:
+      - "xbmc/**"
+      - "addons/skin.estuary/**"
   workflow_dispatch:
 
 permissions:

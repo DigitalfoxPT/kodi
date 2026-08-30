@@ -17,6 +17,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        LogList.ItemsSource = LogMessages;
         string? lastFolder = AppSettings.LoadLastFolder();
         if (!string.IsNullOrWhiteSpace(lastFolder) && Directory.Exists(lastFolder))
             FolderPathBox.Text = lastFolder;
