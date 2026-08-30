@@ -28,7 +28,10 @@ public partial class App : Application
         try
         {
             StartupDiagnostics.Trace("OnLaunched: before MainWindow constructor");
-            _window = new MainWindow();
+            string? probe = Environment.GetEnvironmentVariable("KODI_SEEK_PREVIEW_UI_PROBE");
+            _window = string.IsNullOrWhiteSpace(probe)
+                ? new MainWindow()
+                : CreateProbeWindow(probe);
             StartupDiagnostics.Trace("OnLaunched: before window activation");
             _window.Activate();
             StartupDiagnostics.Trace("OnLaunched: after window activation");
@@ -43,6 +46,31 @@ public partial class App : Application
     private static void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs args)
     {
         StartupDiagnostics.Report(args.Exception);
+    }
+
+    private static Window CreateProbeWindow(string probe)
+    {
+        var window = new Window { Title = $"Kodi probe: {probe}" };
+        window.Content = probe switch
+        {
+            "empty" => null,
+            "grid" => new Grid(),
+            "text" => new TextBlock { Text = "Kodi Seek Preview Generator" },
+            "stack" => new StackPanel
+            {
+                Children =
+                {
+                    new TextBlock { Text = "Kodi Seek Preview Generator" },
+                    new TextBlock { Text = "Teste WinUI" },
+                },
+            },
+            "textbox" => new TextBox { PlaceholderText = "Pasta" },
+            "button" => new Button { Content = "Escolher pasta" },
+            "progress" => new ProgressBar { Minimum = 0, Maximum = 1 },
+            "list" => new ListView { ItemsSource = new[] { "Linha" } },
+            _ => throw new ArgumentOutOfRangeException(nameof(probe), probe, "Unknown UI probe"),
+        };
+        return window;
     }
 }
 

@@ -53,24 +53,40 @@ jobs:
           $application = Join-Path `
             $env:RUNNER_TEMP `
             "KodiSeekPreviewGenerator/KodiSeekPreviewGenerator.App.exe"
-          $process = Start-Process -FilePath $application -PassThru
-          Start-Sleep -Seconds 8
-          $process.Refresh()
-          if ($process.HasExited) {
+          $failures = @()
+          foreach ($probe in @(
+            "empty", "grid", "text", "stack", "textbox", "button",
+            "progress", "list", "full")) {
+            if ($probe -eq "full") {
+              Remove-Item Env:KODI_SEEK_PREVIEW_UI_PROBE -ErrorAction SilentlyContinue
+            } else {
+              $env:KODI_SEEK_PREVIEW_UI_PROBE = $probe
+            }
+            $process = Start-Process -FilePath $application -PassThru
+            Start-Sleep -Seconds 3
+            $process.Refresh()
+            if ($process.HasExited) {
+              Write-Host "FAILED probe: $probe (exit $($process.ExitCode))"
+              $failures += $probe
+              continue
+            }
+            if ($process.MainWindowHandle -eq 0) {
+              Write-Host "FAILED probe: $probe (no main window)"
+              $failures += $probe
+            } else {
+              Write-Host "PASSED probe: $probe ($($process.MainWindowTitle))"
+            }
+            Stop-Process -Id $process.Id -Force
+          }
+          if ($failures.Count -gt 0) {
             $diagnostic = Join-Path `
               $env:LOCALAPPDATA `
               "KodiSeekPreviewGenerator/startup-trace.log"
             if (Test-Path -LiteralPath $diagnostic) {
               Get-Content -LiteralPath $diagnostic
             }
-            throw "Published application exited during its startup test"
+            throw "UI startup probes failed: $($failures -join ', ')"
           }
-          if ($process.MainWindowHandle -eq 0) {
-            Stop-Process -Id $process.Id -Force
-            throw "Published application did not create a main window"
-          }
-          Write-Host "Opened window: $($process.MainWindowTitle)"
-          Stop-Process -Id $process.Id -Force
 
       - name: Bundle FFmpeg
         shell: pwsh
