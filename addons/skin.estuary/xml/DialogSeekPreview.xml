@@ -7,7 +7,7 @@
 		<control type="group">
 			<visible>!Window.IsVisible(videoosd)</visible>
 			<centerleft>50%</centerleft>
-			<top>65</top>
+			<top>80</top>
 			<width>1710</width>
 			<height>248</height>
 			<animation effect="fade" time="150">VisibleChange</animation>
@@ -60,7 +60,7 @@
 		<control type="group">
 			<visible>Window.IsVisible(videoosd)</visible>
 			<centerleft>50%</centerleft>
-			<bottom>205</bottom>
+			<bottom>220</bottom>
 			<width>1710</width>
 			<height>248</height>
 			<animation effect="fade" time="150">VisibleChange</animation>
