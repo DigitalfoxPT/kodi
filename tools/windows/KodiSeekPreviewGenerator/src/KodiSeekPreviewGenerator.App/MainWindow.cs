@@ -3,6 +3,8 @@ using KodiSeekPreviewGenerator.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.Storage;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 
@@ -62,7 +64,7 @@ public sealed class MainWindow : Window
             Spacing = 9,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        titleBarContent.Children.Add(CreateLogo(28, 7, 14));
+        titleBarContent.Children.Add(CreateLogo(28));
         titleBarContent.Children.Add(new TextBlock
         {
             Text = Title,
@@ -77,7 +79,7 @@ public sealed class MainWindow : Window
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        var logoContainer = CreateLogo(62, 16, 30);
+        var logoContainer = CreateLogo(62);
         header.Children.Add(logoContainer);
 
         var heading = new StackPanel
@@ -307,28 +309,39 @@ public sealed class MainWindow : Window
         titleBar.ButtonInactiveForegroundColor = lightGray;
     }
 
-    private static Border CreateLogo(double size, double cornerRadius, double glyphSize)
+    private static Image CreateLogo(double size)
     {
-        return new Border
+        var logo = new Image
         {
             Width = size,
             Height = size,
-            CornerRadius = new CornerRadius(cornerRadius),
-            Background = CreateBrush(15, 48, 78),
-            BorderBrush = CreateBrush(31, 105, 161),
-            BorderThickness = new Thickness(1),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            Child = new FontIcon
-            {
-                Glyph = "\uE714",
-                FontSize = glyphSize,
-                Foreground = CreateBrush(255, 255, 255),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                IsTextScaleFactorEnabled = false,
-            },
+            Stretch = Stretch.Uniform,
+            IsHitTestVisible = false,
         };
+        logo.Loaded += Logo_Loaded;
+        return logo;
+    }
+
+    private static async void Logo_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Image logo)
+            return;
+
+        logo.Loaded -= Logo_Loaded;
+        string logoPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "Assets",
+            "KodiSeekPreviewGenerator.png");
+        if (!File.Exists(logoPath))
+            return;
+
+        StorageFile logoFile = await StorageFile.GetFileFromPathAsync(logoPath);
+        using var logoStream = await logoFile.OpenAsync(FileAccessMode.Read);
+        var bitmap = new BitmapImage();
+        await bitmap.SetSourceAsync(logoStream);
+        logo.Source = bitmap;
     }
 
     private static Button CreateButton(string text, string glyph, bool primary = false)
