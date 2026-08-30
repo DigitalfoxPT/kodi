@@ -15,8 +15,10 @@ public sealed class MainWindow : Window
     private readonly Button _browseButton;
     private readonly Button _generateButton;
     private readonly Button _cancelButton;
-    private readonly ProgressBar _overallProgressBar;
-    private readonly ProgressBar _currentVideoProgressBar;
+    private readonly ColumnDefinition _overallProgressCompletedColumn;
+    private readonly ColumnDefinition _overallProgressRemainingColumn;
+    private readonly ColumnDefinition _currentVideoProgressCompletedColumn;
+    private readonly ColumnDefinition _currentVideoProgressRemainingColumn;
     private readonly TextBlock _generationProgressTextBlock;
     private readonly TextBlock _currentVideoProgressTextBlock;
     private readonly TextBlock _currentVideoPercentTextBlock;
@@ -138,14 +140,9 @@ public sealed class MainWindow : Window
         overallHeader.Children.Add(_generationProgressTextBlock);
         progressContent.Children.Add(overallHeader);
 
-        _overallProgressBar = new ProgressBar
-        {
-            Minimum = 0,
-            Maximum = 1,
-            Value = 0,
-            Height = 5,
-        };
-        progressContent.Children.Add(_overallProgressBar);
+        progressContent.Children.Add(CreateProgressTrack(
+            out _overallProgressCompletedColumn,
+            out _overallProgressRemainingColumn));
 
         var currentVideoHeader = new Grid { Margin = new Thickness(0, 6, 0, 0) };
         currentVideoHeader.ColumnDefinitions.Add(
@@ -169,14 +166,9 @@ public sealed class MainWindow : Window
         currentVideoHeader.Children.Add(_currentVideoPercentTextBlock);
         progressContent.Children.Add(currentVideoHeader);
 
-        _currentVideoProgressBar = new ProgressBar
-        {
-            Minimum = 0,
-            Maximum = 100,
-            Value = 0,
-            Height = 5,
-        };
-        progressContent.Children.Add(_currentVideoProgressBar);
+        progressContent.Children.Add(CreateProgressTrack(
+            out _currentVideoProgressCompletedColumn,
+            out _currentVideoProgressRemainingColumn));
         layout.Children.Add(CreateCard(progressContent));
 
         _statusTitleTextBlock = new TextBlock
@@ -344,6 +336,53 @@ public sealed class MainWindow : Window
         };
     }
 
+    private static Border CreateProgressTrack(
+        out ColumnDefinition completedColumn,
+        out ColumnDefinition remainingColumn)
+    {
+        completedColumn = new ColumnDefinition { Width = new GridLength(0) };
+        remainingColumn = new ColumnDefinition
+        {
+            Width = new GridLength(1, GridUnitType.Star),
+        };
+
+        var fill = new Border
+        {
+            Background = CreateBrush(0, 120, 212),
+            CornerRadius = new CornerRadius(3),
+        };
+        var progressLayout = new Grid();
+        progressLayout.ColumnDefinitions.Add(completedColumn);
+        progressLayout.ColumnDefinitions.Add(remainingColumn);
+        progressLayout.Children.Add(fill);
+
+        return new Border
+        {
+            Height = 6,
+            CornerRadius = new CornerRadius(3),
+            Background = CreateBrush(38, 46, 58),
+            Child = progressLayout,
+        };
+    }
+
+    private static void SetProgress(
+        ColumnDefinition completedColumn,
+        ColumnDefinition remainingColumn,
+        double value,
+        double maximum)
+    {
+        double ratio = maximum <= 0
+            ? 0
+            : Math.Clamp(value / maximum, 0, 1);
+
+        completedColumn.Width = ratio <= 0
+            ? new GridLength(0)
+            : new GridLength(ratio, GridUnitType.Star);
+        remainingColumn.Width = ratio >= 1
+            ? new GridLength(0)
+            : new GridLength(1 - ratio, GridUnitType.Star);
+    }
+
     private static SolidColorBrush CreateBrush(byte red, byte green, byte blue)
     {
         return new SolidColorBrush(Windows.UI.Color.FromArgb(255, red, green, blue));
@@ -391,11 +430,18 @@ public sealed class MainWindow : Window
         SetBusy(true);
         LogMessages.Clear();
         _generationProgressTextBlock.Text = "0 / 0";
-        _overallProgressBar.Maximum = 1;
-        _overallProgressBar.Value = 0;
+        SetProgress(
+            _overallProgressCompletedColumn,
+            _overallProgressRemainingColumn,
+            0,
+            1);
         _currentVideoProgressTextBlock.Text = "A preparar a análise…";
         _currentVideoPercentTextBlock.Text = "—";
-        _currentVideoProgressBar.Value = 0;
+        SetProgress(
+            _currentVideoProgressCompletedColumn,
+            _currentVideoProgressRemainingColumn,
+            0,
+            100);
         _generationCancellation = new CancellationTokenSource();
 
         try
@@ -405,8 +451,11 @@ public sealed class MainWindow : Window
             var progress = new Progress<GenerationProgress>(update =>
             {
                 _generationProgressTextBlock.Text = $"{update.Completed} / {update.Total}";
-                _overallProgressBar.Maximum = Math.Max(1, update.Total);
-                _overallProgressBar.Value = Math.Clamp(update.Completed, 0, update.Total);
+                SetProgress(
+                    _overallProgressCompletedColumn,
+                    _overallProgressRemainingColumn,
+                    update.Completed,
+                    Math.Max(1, update.Total));
                 if (update.CurrentVideoPercent is int percent)
                 {
                     string videoName = update.CurrentVideo is null
@@ -414,7 +463,11 @@ public sealed class MainWindow : Window
                         : Path.GetFileName(update.CurrentVideo);
                     _currentVideoProgressTextBlock.Text = videoName;
                     _currentVideoPercentTextBlock.Text = $"{percent}%";
-                    _currentVideoProgressBar.Value = percent;
+                    SetProgress(
+                        _currentVideoProgressCompletedColumn,
+                        _currentVideoProgressRemainingColumn,
+                        percent,
+                        100);
                     SetStatus(InfoBarSeverity.Informational,
                         "A trabalhar", update.Message);
                     return;
@@ -436,10 +489,18 @@ public sealed class MainWindow : Window
             InfoBarSeverity severity = summary.Failed == 0
                 ? InfoBarSeverity.Success
                 : InfoBarSeverity.Warning;
-            _overallProgressBar.Value = _overallProgressBar.Maximum;
+            SetProgress(
+                _overallProgressCompletedColumn,
+                _overallProgressRemainingColumn,
+                1,
+                1);
             _currentVideoProgressTextBlock.Text = "Análise concluída";
             _currentVideoPercentTextBlock.Text = "100%";
-            _currentVideoProgressBar.Value = 100;
+            SetProgress(
+                _currentVideoProgressCompletedColumn,
+                _currentVideoProgressRemainingColumn,
+                100,
+                100);
             SetStatus(severity, "Concluído",
                 $"{summary.VideosFound} vídeo(s): {summary.Generated} criado(s), " +
                 $"{summary.Skipped} já existente(s), {summary.Failed} erro(s).");
