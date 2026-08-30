@@ -339,7 +339,16 @@ public sealed class MainWindow : Window
 
         StorageFile logoFile = await StorageFile.GetFileFromPathAsync(logoPath);
         using var logoStream = await logoFile.OpenAsync(FileAccessMode.Read);
-        var bitmap = new BitmapImage();
+        double rasterizationScale = logo.XamlRoot?.RasterizationScale ?? 1.0;
+        int decodePixelSize = Math.Max(
+            1,
+            (int)Math.Ceiling(logo.ActualWidth * rasterizationScale));
+        var bitmap = new BitmapImage
+        {
+            DecodePixelType = DecodePixelType.Physical,
+            DecodePixelWidth = decodePixelSize,
+            DecodePixelHeight = decodePixelSize,
+        };
         await bitmap.SetSourceAsync(logoStream);
         logo.Source = bitmap;
     }
