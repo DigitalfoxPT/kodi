@@ -290,6 +290,17 @@ bool CPlayerGUIInfo::GetLabel(std::string& value, const CFileItem *item, int con
 
       const int64_t totalTimeMs = m_appPlayer->GetTotalTime();
       int64_t targetTimeMs = seekHandler.GetSeekPreviewTimeMs();
+      if (!info.GetData3().empty())
+      {
+        int offsetSeconds{0};
+        const std::from_chars_result result = std::from_chars(
+            info.GetData3().data(), info.GetData3().data() + info.GetData3().size(), offsetSeconds);
+        if (result.ec != std::errc{} ||
+            result.ptr != info.GetData3().data() + info.GetData3().size())
+          return false;
+
+        targetTimeMs += static_cast<int64_t>(offsetSeconds) * 1000;
+      }
       targetTimeMs =
           std::clamp(targetTimeMs, int64_t{0}, std::max(int64_t{0}, totalTimeMs - 1));
 

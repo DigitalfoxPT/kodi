@@ -7,43 +7,107 @@
 		<control type="group">
 			<visible>!Window.IsVisible(videoosd)</visible>
 			<centerleft>50%</centerleft>
-			<top>75</top>
-			<width>500</width>
-			<height>281</height>
+			<top>65</top>
+			<width>1710</width>
+			<height>248</height>
 			<animation effect="fade" time="150">VisibleChange</animation>
 			<control type="image">
-				<left>-6</left>
-				<top>-6</top>
-				<width>512</width>
-				<height>293</height>
-				<texture border="10" colordiffuse="CC000000">colors/white.png</texture>
+				<left>0</left><top>36</top><width>308</width><height>177</height>
+				<texture border="8" colordiffuse="E6000000">colors/white.png</texture>
 			</control>
 			<control type="image">
-				<width>500</width>
-				<height>281</height>
+				<left>4</left><top>40</top><width>300</width><height>169</height>
+				<aspectratio align="center" aligny="center">keep</aspectratio>
+				<texture background="true" colordiffuse="B8FFFFFF">$INFO[Player.SeekPreview(-20)]</texture>
+			</control>
+			<control type="image">
+				<left>316</left><top>36</top><width>308</width><height>177</height>
+				<texture border="8" colordiffuse="E6000000">colors/white.png</texture>
+			</control>
+			<control type="image">
+				<left>320</left><top>40</top><width>300</width><height>169</height>
+				<aspectratio align="center" aligny="center">keep</aspectratio>
+				<texture background="true" colordiffuse="E6FFFFFF">$INFO[Player.SeekPreview(-10)]</texture>
+			</control>
+			<control type="image">
+				<left>639</left><top>-1</top><width>432</width><height>250</height>
+				<texture border="10">colors/white.png</texture>
+			</control>
+			<control type="image">
+				<left>647</left><top>7</top><width>416</width><height>234</height>
 				<aspectratio align="center" aligny="center">keep</aspectratio>
 				<texture background="true">$INFO[Player.SeekPreview]</texture>
+			</control>
+			<control type="image">
+				<left>1086</left><top>36</top><width>308</width><height>177</height>
+				<texture border="8" colordiffuse="E6000000">colors/white.png</texture>
+			</control>
+			<control type="image">
+				<left>1090</left><top>40</top><width>300</width><height>169</height>
+				<aspectratio align="center" aligny="center">keep</aspectratio>
+				<texture background="true" colordiffuse="E6FFFFFF">$INFO[Player.SeekPreview(10)]</texture>
+			</control>
+			<control type="image">
+				<left>1402</left><top>36</top><width>308</width><height>177</height>
+				<texture border="8" colordiffuse="E6000000">colors/white.png</texture>
+			</control>
+			<control type="image">
+				<left>1406</left><top>40</top><width>300</width><height>169</height>
+				<aspectratio align="center" aligny="center">keep</aspectratio>
+				<texture background="true" colordiffuse="B8FFFFFF">$INFO[Player.SeekPreview(20)]</texture>
 			</control>
 		</control>
 		<control type="group">
 			<visible>Window.IsVisible(videoosd)</visible>
 			<centerleft>50%</centerleft>
-			<bottom>210</bottom>
-			<width>500</width>
-			<height>281</height>
+			<bottom>205</bottom>
+			<width>1710</width>
+			<height>248</height>
 			<animation effect="fade" time="150">VisibleChange</animation>
 			<control type="image">
-				<left>-6</left>
-				<top>-6</top>
-				<width>512</width>
-				<height>293</height>
-				<texture border="10" colordiffuse="CC000000">colors/white.png</texture>
+				<left>0</left><top>36</top><width>308</width><height>177</height>
+				<texture border="8" colordiffuse="E6000000">colors/white.png</texture>
 			</control>
 			<control type="image">
-				<width>500</width>
-				<height>281</height>
+				<left>4</left><top>40</top><width>300</width><height>169</height>
+				<aspectratio align="center" aligny="center">keep</aspectratio>
+				<texture background="true" colordiffuse="B8FFFFFF">$INFO[Player.SeekPreview(-20)]</texture>
+			</control>
+			<control type="image">
+				<left>316</left><top>36</top><width>308</width><height>177</height>
+				<texture border="8" colordiffuse="E6000000">colors/white.png</texture>
+			</control>
+			<control type="image">
+				<left>320</left><top>40</top><width>300</width><height>169</height>
+				<aspectratio align="center" aligny="center">keep</aspectratio>
+				<texture background="true" colordiffuse="E6FFFFFF">$INFO[Player.SeekPreview(-10)]</texture>
+			</control>
+			<control type="image">
+				<left>639</left><top>-1</top><width>432</width><height>250</height>
+				<texture border="10">colors/white.png</texture>
+			</control>
+			<control type="image">
+				<left>647</left><top>7</top><width>416</width><height>234</height>
 				<aspectratio align="center" aligny="center">keep</aspectratio>
 				<texture background="true">$INFO[Player.SeekPreview]</texture>
+			</control>
+			<control type="image">
+				<left>1086</left><top>36</top><width>308</width><height>177</height>
+				<texture border="8" colordiffuse="E6000000">colors/white.png</texture>
+			</control>
+			<control type="image">
+				<left>1090</left><top>40</top><width>300</width><height>169</height>
+				<aspectratio align="center" aligny="center">keep</aspectratio>
+				<texture background="true" colordiffuse="E6FFFFFF">$INFO[Player.SeekPreview(10)]</texture>
+			</control>
+			<control type="image">
+				<left>1402</left><top>36</top><width>308</width><height>177</height>
+				<texture border="8" colordiffuse="E6000000">colors/white.png</texture>
+			</control>
+			<control type="image">
+				<left>1406</left><top>40</top><width>300</width><height>169</height>
+				<aspectratio align="center" aligny="center">keep</aspectratio>
+				<texture background="true" colordiffuse="B8FFFFFF">$INFO[Player.SeekPreview(20)]</texture>
 			</control>
 		</control>
 	</controls>

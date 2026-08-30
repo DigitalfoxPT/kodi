@@ -10114,7 +10114,11 @@ int CGUIInfoManager::TranslateSingleString(const std::string &strCondition, bool
       for (const infomap& player_label : player_labels)
       {
         if (prop.name == player_label.str)
+        {
+          if (player_label.val == PLAYER_SEEKPREVIEW && prop.num_params() == 1)
+            return AddMultiInfo(CGUIInfo(player_label.val, prop.param()));
           return player_label.val;
+        }
       }
       for (const infomap& player_time : player_times)
       {
