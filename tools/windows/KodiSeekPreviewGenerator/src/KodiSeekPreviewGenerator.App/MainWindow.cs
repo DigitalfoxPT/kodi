@@ -15,6 +15,7 @@ public sealed class MainWindow : Window
     private readonly Button _generateButton;
     private readonly Button _cancelButton;
     private readonly TextBlock _generationProgressTextBlock;
+    private readonly TextBlock _currentVideoProgressTextBlock;
     private readonly TextBlock _statusTitleTextBlock;
     private readonly TextBlock _statusMessageTextBlock;
     private readonly ListView _logList;
@@ -51,6 +52,9 @@ public sealed class MainWindow : Window
         {
             PlaceholderText = "Escolha a pasta Shows ou outra pasta principal",
             IsReadOnly = true,
+            CornerRadius = new CornerRadius(8),
+            MinHeight = 44,
+            Padding = new Thickness(12, 8, 12, 8),
         };
         layout.Children.Add(_folderPathBox);
 
@@ -59,9 +63,10 @@ public sealed class MainWindow : Window
             Orientation = Orientation.Horizontal,
             Spacing = 8,
         };
-        _browseButton = new Button { Content = "Escolher pasta" };
-        _generateButton = new Button { Content = "Analisar e gerar previews" };
-        _cancelButton = new Button { Content = "Cancelar", IsEnabled = false };
+        _browseButton = CreateButton("Escolher pasta");
+        _generateButton = CreateButton("Analisar e gerar previews");
+        _cancelButton = CreateButton("Cancelar");
+        _cancelButton.IsEnabled = false;
         buttonPanel.Children.Add(_browseButton);
         buttonPanel.Children.Add(_generateButton);
         buttonPanel.Children.Add(_cancelButton);
@@ -72,6 +77,13 @@ public sealed class MainWindow : Window
             Text = "Progresso: 0/0",
         };
         layout.Children.Add(_generationProgressTextBlock);
+
+        _currentVideoProgressTextBlock = new TextBlock
+        {
+            Text = "Vídeo atual: —",
+            TextWrapping = TextWrapping.Wrap,
+        };
+        layout.Children.Add(_currentVideoProgressTextBlock);
 
         _statusTitleTextBlock = new TextBlock
         {
@@ -104,6 +116,44 @@ public sealed class MainWindow : Window
         string? lastFolder = AppSettings.LoadLastFolder();
         if (!string.IsNullOrWhiteSpace(lastFolder) && Directory.Exists(lastFolder))
             _folderPathBox.Text = lastFolder;
+    }
+
+    public void ApplyWindowChrome()
+    {
+        string iconPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "Assets",
+            "KodiSeekPreviewGenerator.ico");
+        if (File.Exists(iconPath))
+            AppWindow.SetIcon(iconPath);
+
+        var titleBar = AppWindow.TitleBar;
+        Windows.UI.Color background = Windows.UI.Color.FromArgb(255, 24, 24, 24);
+        Windows.UI.Color hover = Windows.UI.Color.FromArgb(255, 50, 50, 50);
+        Windows.UI.Color pressed = Windows.UI.Color.FromArgb(255, 70, 70, 70);
+        titleBar.BackgroundColor = background;
+        titleBar.ForegroundColor = Windows.UI.Colors.White;
+        titleBar.InactiveBackgroundColor = background;
+        titleBar.InactiveForegroundColor = Windows.UI.Colors.LightGray;
+        titleBar.ButtonBackgroundColor = background;
+        titleBar.ButtonForegroundColor = Windows.UI.Colors.White;
+        titleBar.ButtonHoverBackgroundColor = hover;
+        titleBar.ButtonHoverForegroundColor = Windows.UI.Colors.White;
+        titleBar.ButtonPressedBackgroundColor = pressed;
+        titleBar.ButtonPressedForegroundColor = Windows.UI.Colors.White;
+        titleBar.ButtonInactiveBackgroundColor = background;
+        titleBar.ButtonInactiveForegroundColor = Windows.UI.Colors.LightGray;
+    }
+
+    private static Button CreateButton(string content)
+    {
+        return new Button
+        {
+            Content = content,
+            CornerRadius = new CornerRadius(8),
+            MinHeight = 44,
+            Padding = new Thickness(16, 10, 16, 10),
+        };
     }
 
     private async void RootLayout_Loaded(object sender, RoutedEventArgs e)
@@ -148,6 +198,7 @@ public sealed class MainWindow : Window
         SetBusy(true);
         LogMessages.Clear();
         _generationProgressTextBlock.Text = "Progresso: 0/0";
+        _currentVideoProgressTextBlock.Text = "Vídeo atual: —";
         _generationCancellation = new CancellationTokenSource();
 
         try
@@ -157,6 +208,17 @@ public sealed class MainWindow : Window
             var progress = new Progress<GenerationProgress>(update =>
             {
                 _generationProgressTextBlock.Text = $"Progresso: {update.Completed}/{update.Total}";
+                if (update.CurrentVideoPercent is int percent)
+                {
+                    string videoName = update.CurrentVideo is null
+                        ? "—"
+                        : Path.GetFileName(update.CurrentVideo);
+                    _currentVideoProgressTextBlock.Text = $"Vídeo atual: {percent}% — {videoName}";
+                    SetStatus(InfoBarSeverity.Informational,
+                        $"A trabalhar — {percent}%", update.Message);
+                    return;
+                }
+
                 LogMessages.Add(update.Message);
                 if (LogMessages.Count > 2_000)
                     LogMessages.RemoveAt(0);

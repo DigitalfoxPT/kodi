@@ -88,7 +88,7 @@ public sealed class PreviewGenerator
             }
 
             progress?.Report(new GenerationProgress(index, videos.Count,
-                $"A gerar: {relativePath}", videoPath));
+                $"A gerar: {relativePath}", videoPath, 0));
 
             string frameFolder = Path.Combine(
                 Path.GetTempPath(), "KodiSeekPreviewGenerator", Guid.NewGuid().ToString("N"));
@@ -97,7 +97,16 @@ public sealed class PreviewGenerator
             {
                 Directory.CreateDirectory(frameFolder);
                 string framePattern = Path.Combine(frameFolder, "%08d.jpg");
-                await _ffmpeg.ExtractFramesAsync(videoPath, framePattern, cancellationToken);
+                await _ffmpeg.ExtractFramesAsync(
+                    videoPath,
+                    framePattern,
+                    percent => progress?.Report(new GenerationProgress(
+                        index,
+                        videos.Count,
+                        $"A gerar ({percent}%): {relativePath}",
+                        videoPath,
+                        percent)),
+                    cancellationToken);
 
                 List<string> frames = Directory
                     .EnumerateFiles(frameFolder, "*.jpg", SearchOption.TopDirectoryOnly)

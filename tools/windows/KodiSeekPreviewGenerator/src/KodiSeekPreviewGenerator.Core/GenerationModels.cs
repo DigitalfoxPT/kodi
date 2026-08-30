@@ -4,7 +4,8 @@ public sealed record GenerationProgress(
     int Completed,
     int Total,
     string Message,
-    string? CurrentVideo = null);
+    string? CurrentVideo = null,
+    int? CurrentVideoPercent = null);
 
 public sealed record GenerationSummary(
     int VideosFound,
