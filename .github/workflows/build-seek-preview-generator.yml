@@ -172,7 +172,7 @@ jobs:
             $env:RUNNER_TEMP `
             "KodiSeekPreviewGenerator/Kodi.exe"
           $launcherProcess = Start-Process -FilePath $launcher -PassThru
-          $launcherProcess.WaitForExit(10_000)
+          $launcherProcess.WaitForExit(10000)
           if (-not $launcherProcess.HasExited -or $launcherProcess.ExitCode -ne 0) {
             throw "The package launcher failed"
           }
