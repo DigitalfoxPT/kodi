@@ -74,7 +74,7 @@ public sealed class MainWindow : Window
         {
             Text = "Kodi Seek Preview Generator",
             FontSize = 30,
-            FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
         });
         heading.Children.Add(new TextBlock
         {
@@ -129,7 +129,7 @@ public sealed class MainWindow : Window
         overallHeader.Children.Add(new TextBlock
         {
             Text = "Biblioteca",
-            FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
         });
         _generationProgressTextBlock = new TextBlock
         {
@@ -163,7 +163,7 @@ public sealed class MainWindow : Window
         _currentVideoPercentTextBlock = new TextBlock
         {
             Text = "—",
-            FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Foreground = CreateBrush(83, 177, 255),
             Margin = new Thickness(16, 0, 0, 0),
         };
@@ -185,7 +185,7 @@ public sealed class MainWindow : Window
         {
             Text = "Pronto",
             FontSize = 18,
-            FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
         };
         _statusMessageTextBlock = new TextBlock
         {
@@ -231,7 +231,7 @@ public sealed class MainWindow : Window
             Height = 280,
             SelectionMode = ListViewSelectionMode.None,
             ItemsSource = LogMessages,
-            Background = new SolidColorBrush(Windows.UI.Colors.Transparent),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0)),
         };
         logContent.Children.Add(_logList);
         layout.Children.Add(CreateCard(logContent));
@@ -341,7 +341,7 @@ public sealed class MainWindow : Window
             Text = text,
             FontSize = 12,
             CharacterSpacing = 90,
-            FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Foreground = CreateBrush(83, 177, 255),
         };
     }
