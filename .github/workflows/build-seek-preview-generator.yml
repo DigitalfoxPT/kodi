@@ -45,14 +45,14 @@ jobs:
           --runtime win-x64
           --self-contained true
           --property Platform=x64
-          --output "${{ runner.temp }}/KodiSeekPreviewGenerator"
+          --output "${{ runner.temp }}/KodiSeekPreviewGenerator/Data"
 
       - name: Verify published application starts
         shell: pwsh
         run: |
           $application = Join-Path `
             $env:RUNNER_TEMP `
-            "KodiSeekPreviewGenerator/KodiSeekPreviewGenerator.App.exe"
+            "KodiSeekPreviewGenerator/Data/KodiSeekPreviewGenerator.App.exe"
           $process = Start-Process -FilePath $application -PassThru
           Start-Sleep -Seconds 8
           $process.Refresh()
@@ -81,7 +81,120 @@ jobs:
             throw "ffmpeg.exe was not found in the downloaded archive"
           }
           Copy-Item -LiteralPath $ffmpeg.FullName `
-            -Destination "${{ runner.temp }}/KodiSeekPreviewGenerator/ffmpeg.exe"
+            -Destination "${{ runner.temp }}/KodiSeekPreviewGenerator/Data/ffmpeg.exe"
+
+      - name: Keep Portuguese language resources
+        shell: pwsh
+        run: |
+          $dataDirectory = [System.IO.Path]::GetFullPath(
+            (Join-Path $env:RUNNER_TEMP "KodiSeekPreviewGenerator/Data"))
+          $runnerTemp = [System.IO.Path]::GetFullPath($env:RUNNER_TEMP)
+          if (-not $dataDirectory.StartsWith(
+              $runnerTemp + [System.IO.Path]::DirectorySeparatorChar,
+              [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Package data directory is outside RUNNER_TEMP"
+          }
+
+          $keptCultures = @("pt-PT", "en-US")
+          foreach ($folder in Get-ChildItem -LiteralPath $dataDirectory -Directory) {
+            try {
+              $null = [System.Globalization.CultureInfo]::GetCultureInfo($folder.Name)
+            }
+            catch {
+              continue
+            }
+
+            if ($keptCultures -contains $folder.Name) {
+              continue
+            }
+
+            $resolvedFolder = [System.IO.Path]::GetFullPath($folder.FullName)
+            if (-not $resolvedFolder.StartsWith(
+                $dataDirectory + [System.IO.Path]::DirectorySeparatorChar,
+                [System.StringComparison]::OrdinalIgnoreCase)) {
+              throw "Refusing to remove a folder outside the package data directory"
+            }
+            Remove-Item -LiteralPath $resolvedFolder -Recurse -Force
+          }
+
+      - name: Build tidy package launcher
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path `
+            ${env:ProgramFiles(x86)} `
+            "Microsoft Visual Studio/Installer/vswhere.exe"
+          $visualStudio = & $vswhere `
+            -latest `
+            -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+            -property installationPath
+          if ([string]::IsNullOrWhiteSpace($visualStudio)) {
+            throw "Visual Studio C++ build tools were not found"
+          }
+
+          $developerPrompt = Join-Path `
+            $visualStudio `
+            "VC/Auxiliary/Build/vcvars64.bat"
+          $launcherDirectory = Resolve-Path `
+            "tools/windows/KodiSeekPreviewGenerator/src/KodiSeekPreviewGenerator.Launcher"
+          $launcherSource = Join-Path $launcherDirectory "Launcher.cpp"
+          $launcherResource = Join-Path $launcherDirectory "Launcher.rc"
+          $compiledResource = Join-Path $env:RUNNER_TEMP "KodiSeekPreviewGenerator.res"
+          $launcherOutput = Join-Path `
+            $env:RUNNER_TEMP `
+            "KodiSeekPreviewGenerator/KodiSeekPreviewGenerator.App.exe"
+
+          Push-Location $launcherDirectory
+          try {
+            $compileCommand = `
+              "call `"$developerPrompt`" && " + `
+              "rc.exe /nologo /fo `"$compiledResource`" `"$launcherResource`" && " + `
+              "cl.exe /nologo /O2 /W4 /utf-8 /DUNICODE /D_UNICODE " + `
+              "`"$launcherSource`" `"$compiledResource`" " + `
+              "/link /SUBSYSTEM:WINDOWS /OUT:`"$launcherOutput`" user32.lib"
+            & cmd.exe /d /s /c $compileCommand
+            if ($LASTEXITCODE -ne 0) {
+              throw "The package launcher could not be compiled"
+            }
+          }
+          finally {
+            Pop-Location
+          }
+
+          if (-not (Test-Path -LiteralPath $launcherOutput)) {
+            throw "The package launcher was not created"
+          }
+
+      - name: Verify tidy package launcher
+        shell: pwsh
+        run: |
+          $launcher = Join-Path `
+            $env:RUNNER_TEMP `
+            "KodiSeekPreviewGenerator/KodiSeekPreviewGenerator.App.exe"
+          $launcherProcess = Start-Process -FilePath $launcher -PassThru
+          $launcherProcess.WaitForExit(10_000)
+          if (-not $launcherProcess.HasExited -or $launcherProcess.ExitCode -ne 0) {
+            throw "The package launcher failed"
+          }
+
+          Start-Sleep -Seconds 8
+          $applicationProcessInfo = Get-CimInstance Win32_Process |
+            Where-Object ParentProcessId -eq $launcherProcess.Id |
+            Select-Object -First 1
+          if ($null -eq $applicationProcessInfo) {
+            throw "The package launcher did not start the WinUI application"
+          }
+
+          $applicationProcess = Get-Process -Id $applicationProcessInfo.ProcessId
+          $applicationProcess.Refresh()
+          if ($applicationProcess.HasExited -or $applicationProcess.MainWindowHandle -eq 0) {
+            if (-not $applicationProcess.HasExited) {
+              Stop-Process -Id $applicationProcess.Id -Force
+            }
+            throw "The launched WinUI application did not create a main window"
+          }
+          Write-Host "Opened tidy package window: $($applicationProcess.MainWindowTitle)"
+          Stop-Process -Id $applicationProcess.Id -Force
 
       - name: Upload Windows application
         uses: actions/upload-artifact@v6
