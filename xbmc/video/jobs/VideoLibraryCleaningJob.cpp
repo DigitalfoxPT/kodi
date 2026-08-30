@@ -10,7 +10,6 @@
 
 #include "dialogs/GUIDialogExtendedProgressBar.h"
 #include "video/VideoDatabase.h"
-#include "video/VideoSeekPreviewCache.h"
 
 CVideoLibraryCleaningJob::CVideoLibraryCleaningJob(const std::set<int>& paths /* = std::set<int>() */, bool showDialog /* = false */)
   : CVideoLibraryProgressJob(NULL),
@@ -42,6 +41,5 @@ bool CVideoLibraryCleaningJob::operator==(const CJob* job) const
 bool CVideoLibraryCleaningJob::Work(CVideoDatabase &db)
 {
   db.CleanDatabase(GetProgressBar(), m_paths, m_showDialog);
-  VIDEO::CVideoSeekPreviewCache::Update(db, false);
   return true;
 }

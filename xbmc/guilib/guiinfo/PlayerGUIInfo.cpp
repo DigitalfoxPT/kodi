@@ -266,7 +266,7 @@ bool CPlayerGUIInfo::GetLabel(std::string& value, const CFileItem *item, int con
 #if defined(TARGET_ANDROID)
     {
       const CSeekHandler& seekHandler = m_appPlayer->GetSeekHandler();
-      if (!item || !m_appPlayer->IsPlayingVideo() || !seekHandler.IsSeekPreviewActive())
+      if (!m_appPlayer->IsPlayingVideo() || !seekHandler.IsSeekPreviewActive())
         return false;
 
       const int64_t totalTimeMs = m_appPlayer->GetTotalTime();
@@ -274,8 +274,13 @@ bool CPlayerGUIInfo::GetLabel(std::string& value, const CFileItem *item, int con
       targetTimeMs =
           std::clamp(targetTimeMs, int64_t{0}, std::max(int64_t{0}, totalTimeMs - 1));
 
+      const std::string bifPath = seekHandler.GetSeekPreviewBifPath();
+      const std::string bifVersion = seekHandler.GetSeekPreviewBifVersion();
+      if (bifPath.empty() || bifVersion.empty())
+        return false;
+
       value = CTextureUtils::GetWrappedImageURL(
-          item->GetDynPath(), StringUtils::Format("videoseek_{}", targetTimeMs));
+          bifPath, StringUtils::Format("bifseek_{}_{}", targetTimeMs, bifVersion));
       return true;
     }
 #else

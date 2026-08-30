@@ -1,0 +1,72 @@
+name: Build Windows Seek Preview Generator
+
+on:
+  push:
+    branches:
+      - android-tv-seek-preview
+    paths:
+      - "tools/windows/KodiSeekPreviewGenerator/**"
+      - ".github/workflows/build-seek-preview-generator.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seek-preview-generator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows-x64:
+    name: WinUI 3 x64
+    runs-on: windows-2022
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v6
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Validate BIF writer
+        run: >-
+          dotnet run
+          --project tools/windows/KodiSeekPreviewGenerator/tests/KodiSeekPreviewGenerator.Core.SmokeTests/KodiSeekPreviewGenerator.Core.SmokeTests.csproj
+          --configuration Release
+
+      - name: Publish unpackaged self-contained WinUI 3 app
+        run: >-
+          dotnet publish
+          tools/windows/KodiSeekPreviewGenerator/src/KodiSeekPreviewGenerator.App/KodiSeekPreviewGenerator.App.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          --output "${{ runner.temp }}/KodiSeekPreviewGenerator"
+
+      - name: Bundle FFmpeg
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "ffmpeg-release-essentials.zip"
+          $expanded = Join-Path $env:RUNNER_TEMP "ffmpeg-release-essentials"
+          Invoke-WebRequest `
+            -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" `
+            -OutFile $archive
+          Expand-Archive -LiteralPath $archive -DestinationPath $expanded
+          $ffmpeg = Get-ChildItem -LiteralPath $expanded -Filter "ffmpeg.exe" -Recurse |
+            Select-Object -First 1
+          if ($null -eq $ffmpeg) {
+            throw "ffmpeg.exe was not found in the downloaded archive"
+          }
+          Copy-Item -LiteralPath $ffmpeg.FullName `
+            -Destination "${{ runner.temp }}/KodiSeekPreviewGenerator/ffmpeg.exe"
+
+      - name: Upload Windows application
+        uses: actions/upload-artifact@v6
+        with:
+          name: kodi-seek-preview-generator-win-x64
+          path: ${{ runner.temp }}/KodiSeekPreviewGenerator
+          if-no-files-found: error
+          retention-days: 30

@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <map>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -50,6 +51,8 @@ public:
   bool InProgress() const;
   bool IsSeekPreviewActive() const;
   int64_t GetSeekPreviewTimeMs() const;
+  std::string GetSeekPreviewBifPath() const;
+  std::string GetSeekPreviewBifVersion() const;
 
   bool HasTimeCode() const { return m_timeCodePosition > 0; }
   int GetTimeCodeSeconds() const;
@@ -82,6 +85,8 @@ private:
   bool m_seekPreviewPending{false};
   bool m_seekPreviewResumePlayback{false};
   int64_t m_seekPreviewTimeMs{0};
+  std::string m_seekPreviewBifPath;
+  std::string m_seekPreviewBifVersion;
   CStopWatch m_timerTimeCode;
   int m_timeCodeStamp[6];
   int m_timeCodePosition;

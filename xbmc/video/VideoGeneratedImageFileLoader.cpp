@@ -10,12 +10,10 @@
 
 #include "DVDFileInfo.h"
 #include "FileItem.h"
-#include "SeekHandler.h"
 #include "ServiceBroker.h"
 #include "URL.h"
-#include "application/ApplicationComponents.h"
-#include "application/ApplicationPlayer.h"
 #include "filesystem/DirectoryCache.h"
+#include "filesystem/File.h"
 #include "guilib/Texture.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
@@ -25,16 +23,130 @@
 #include "video/VideoInfoTag.h"
 
 #include <algorithm>
-#include <mutex>
+#include <array>
+#include <cstdint>
+#include <limits>
+#include <vector>
 
 bool VIDEO::CVideoGeneratedImageFileLoader::CanLoad(const std::string& specialType) const
 {
-  return specialType == "video" || StringUtils::StartsWith(specialType, "videoseek_");
+  return specialType == "video" || StringUtils::StartsWith(specialType, "bifseek_");
 }
 
 namespace
 {
-std::mutex g_seekPreviewExtractionMutex;
+constexpr std::array<uint8_t, 8> BIF_MAGIC{0x89, 0x42, 0x49, 0x46,
+                                           0x0d, 0x0a, 0x1a, 0x0a};
+constexpr size_t BIF_HEADER_SIZE = 64;
+constexpr uint32_t BIF_DEFAULT_TIMESTAMP_MULTIPLIER_MS = 1000;
+constexpr uint32_t BIF_SENTINEL_TIMESTAMP = std::numeric_limits<uint32_t>::max();
+constexpr uint32_t BIF_MAX_IMAGES = 1'000'000;
+constexpr uint64_t BIF_MAX_JPEG_SIZE = 32ULL * 1024ULL * 1024ULL;
+
+uint32_t ReadLittleEndian32(const uint8_t* bytes)
+{
+  return static_cast<uint32_t>(bytes[0]) |
+         (static_cast<uint32_t>(bytes[1]) << 8) |
+         (static_cast<uint32_t>(bytes[2]) << 16) |
+         (static_cast<uint32_t>(bytes[3]) << 24);
+}
+
+bool ReadExactly(XFILE::CFile& file, void* destination, size_t size)
+{
+  auto* bytes = static_cast<uint8_t*>(destination);
+  size_t totalRead = 0;
+  while (totalRead < size)
+  {
+    const ssize_t read = file.Read(bytes + totalRead, size - totalRead);
+    if (read <= 0)
+      return false;
+    totalRead += static_cast<size_t>(read);
+  }
+  return true;
+}
+
+std::unique_ptr<CTexture> LoadBifFrame(const std::string& bifPath,
+                                       int64_t targetTimeMs,
+                                       unsigned int preferredWidth,
+                                       unsigned int preferredHeight)
+{
+  XFILE::CFile file;
+  if (!file.Open(bifPath))
+  {
+    CLog::Log(LOGWARNING, "Seek preview: unable to open BIF sidecar {}",
+              CURL::GetRedacted(bifPath));
+    return {};
+  }
+
+  const int64_t fileLength = file.GetLength();
+  if (fileLength < static_cast<int64_t>(BIF_HEADER_SIZE))
+    return {};
+
+  std::array<uint8_t, BIF_HEADER_SIZE> header{};
+  if (!ReadExactly(file, header.data(), header.size()) ||
+      !std::equal(BIF_MAGIC.begin(), BIF_MAGIC.end(), header.begin()))
+  {
+    CLog::Log(LOGWARNING, "Seek preview: invalid BIF header in {}",
+              CURL::GetRedacted(bifPath));
+    return {};
+  }
+
+  const uint32_t version = ReadLittleEndian32(header.data() + 8);
+  const uint32_t imageCount = ReadLittleEndian32(header.data() + 12);
+  uint32_t timestampMultiplierMs = ReadLittleEndian32(header.data() + 16);
+  if (version != 0 || imageCount == 0 || imageCount > BIF_MAX_IMAGES)
+    return {};
+  if (timestampMultiplierMs == 0)
+    timestampMultiplierMs = BIF_DEFAULT_TIMESTAMP_MULTIPLIER_MS;
+
+  const uint64_t indexSize = static_cast<uint64_t>(imageCount + 1) * 8;
+  if (indexSize > static_cast<uint64_t>(fileLength) - BIF_HEADER_SIZE)
+    return {};
+
+  std::vector<uint8_t> index(static_cast<size_t>(indexSize));
+  if (!ReadExactly(file, index.data(), index.size()))
+    return {};
+
+  const uint64_t clampedTargetMs = static_cast<uint64_t>(std::max<int64_t>(0, targetTimeMs));
+  uint32_t selectedImage = 0;
+  for (uint32_t image = 0; image < imageCount; ++image)
+  {
+    const uint32_t timestamp = ReadLittleEndian32(index.data() + image * 8);
+    const uint64_t timestampMs = static_cast<uint64_t>(timestamp) * timestampMultiplierMs;
+    if (timestampMs > clampedTargetMs)
+      break;
+    selectedImage = image;
+  }
+
+  const size_t selectedEntry = static_cast<size_t>(selectedImage) * 8;
+  const size_t nextEntry = static_cast<size_t>(selectedImage + 1) * 8;
+  const uint32_t imageOffset = ReadLittleEndian32(index.data() + selectedEntry + 4);
+  const uint32_t nextTimestamp = ReadLittleEndian32(index.data() + nextEntry);
+  const uint32_t nextOffset = ReadLittleEndian32(index.data() + nextEntry + 4);
+  if (selectedImage + 1 == imageCount && nextTimestamp != BIF_SENTINEL_TIMESTAMP)
+    return {};
+  if (imageOffset < BIF_HEADER_SIZE + indexSize || nextOffset <= imageOffset ||
+      nextOffset > static_cast<uint64_t>(fileLength))
+  {
+    return {};
+  }
+
+  const uint64_t jpegSize = static_cast<uint64_t>(nextOffset) - imageOffset;
+  if (jpegSize < 4 || jpegSize > BIF_MAX_JPEG_SIZE ||
+      file.Seek(imageOffset, SEEK_SET) != imageOffset)
+  {
+    return {};
+  }
+
+  std::vector<uint8_t> jpeg(static_cast<size_t>(jpegSize));
+  if (!ReadExactly(file, jpeg.data(), jpeg.size()) || jpeg[0] != 0xff || jpeg[1] != 0xd8)
+    return {};
+
+  CLog::Log(LOGDEBUG, "Seek preview: loaded BIF image {} at {}ms from {}", selectedImage,
+            targetTimeMs, CURL::GetRedacted(bifPath));
+  return CTexture::LoadFromFileInMemory(jpeg.data(), jpeg.size(), "image/jpeg",
+                                        preferredWidth, preferredHeight);
+}
 
 void SetupRarOptions(CFileItem& item, const std::string& path)
 {
@@ -64,7 +176,7 @@ std::unique_ptr<CTexture> VIDEO::CVideoGeneratedImageFileLoader::Load(
     unsigned int preferredWidth,
     unsigned int preferredHeight) const
 {
-  const bool seekPreview = StringUtils::StartsWith(specialType, "videoseek_");
+  const bool seekPreview = StringUtils::StartsWith(specialType, "bifseek_");
   if (!seekPreview && !CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
                           CSettings::SETTING_MYVIDEOS_EXTRACTTHUMB))
   {
@@ -73,7 +185,7 @@ std::unique_ptr<CTexture> VIDEO::CVideoGeneratedImageFileLoader::Load(
 
   CFileItem item{filePath, false};
 
-  if (URIUtils::IsInRAR(filePath))
+  if (!seekPreview && URIUtils::IsInRAR(filePath))
     SetupRarOptions(item, filePath);
 
   int64_t seekTimeMs = -1;
@@ -81,7 +193,7 @@ std::unique_ptr<CTexture> VIDEO::CVideoGeneratedImageFileLoader::Load(
   {
     try
     {
-      seekTimeMs = std::stoll(specialType.substr(10));
+      seekTimeMs = std::stoll(specialType.substr(8));
     }
     catch (...)
     {
@@ -90,55 +202,7 @@ std::unique_ptr<CTexture> VIDEO::CVideoGeneratedImageFileLoader::Load(
   }
 
   if (seekPreview)
-  {
-    // Android TV can request several different preview textures while the user
-    // presses left/right rapidly. Serialise decoder access and discard requests
-    // that became obsolete while waiting. This prevents multiple FFmpeg
-    // instances from competing with MediaCodec and keeps the newest target at
-    // the front of the useful work.
-    std::unique_lock<std::mutex> previewLock(g_seekPreviewExtractionMutex);
-
-    const auto& components = CServiceBroker::GetAppComponents();
-    const auto appPlayer = components.GetComponent<CApplicationPlayer>();
-    const CSeekHandler& seekHandler = appPlayer->GetSeekHandler();
-    const bool playbackActive = appPlayer->IsPlayingVideo();
-    const int64_t totalTimeMs = appPlayer->GetTotalTime();
-    int64_t currentTargetMs = seekHandler.GetSeekPreviewTimeMs();
-    currentTargetMs =
-        std::clamp(currentTargetMs, int64_t{0}, std::max(int64_t{0}, totalTimeMs - 1));
-    if (playbackActive &&
-        (!seekHandler.IsSeekPreviewActive() || currentTargetMs != seekTimeMs))
-    {
-      CLog::Log(LOGDEBUG, "Seek preview: skipping obsolete frame at {}ms", seekTimeMs);
-      return {};
-    }
-
-    CLog::Log(LOGINFO, "Seek preview: {} frame at {}ms from persistent decoder for {}",
-              playbackActive ? "requesting" : "pre-caching", seekTimeMs,
-              CURL::GetRedacted(filePath));
-
-    std::unique_ptr<CTexture> texture = CDVDFileInfo::ExtractSeekPreviewToTexture(
-        item, seekTimeMs, preferredWidth, preferredHeight);
-
-    // A slow first SMB seek can finish after the user has already pressed the
-    // remote again. Never publish that obsolete frame over the newest target.
-    int64_t latestTargetMs = seekHandler.GetSeekPreviewTimeMs();
-    latestTargetMs =
-        std::clamp(latestTargetMs, int64_t{0}, std::max(int64_t{0}, appPlayer->GetTotalTime() - 1));
-    if (appPlayer->IsPlayingVideo() &&
-        (!seekHandler.IsSeekPreviewActive() || latestTargetMs != seekTimeMs))
-    {
-      CLog::Log(LOGDEBUG, "Seek preview: discarding obsolete decoded frame at {}ms", seekTimeMs);
-      return {};
-    }
-
-    if (texture)
-      CLog::Log(LOGINFO, "Seek preview: frame extracted successfully at {}ms", seekTimeMs);
-    else
-      CLog::Log(LOGWARNING, "Seek preview: failed to extract frame at {}ms from {}", seekTimeMs,
-                CURL::GetRedacted(filePath));
-    return texture;
-  }
+    return LoadBifFrame(filePath, seekTimeMs, preferredWidth, preferredHeight);
 
   return CDVDFileInfo::ExtractThumbToTexture(item, 0, seekTimeMs);
 }

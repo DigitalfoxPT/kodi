@@ -28,15 +28,6 @@ public:
                                                          int chapterNumber = 0,
                                                          int64_t seekTimeMs = -1);
 
-  /*! \brief Extract an on-demand seek preview while reusing one software decoder session. */
-  static std::unique_ptr<CTexture> ExtractSeekPreviewToTexture(const CFileItem& fileItem,
-                                                               int64_t seekTimeMs,
-                                                               unsigned int preferredWidth = 0,
-                                                               unsigned int preferredHeight = 0);
-
-  /*! \brief Release the input, demuxer and decoder used by seek previews. */
-  static void ResetSeekPreview();
-
   /*!
    * @brief Can a thumbnail image and file stream details be extracted from this file item?
   */

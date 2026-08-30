@@ -11,9 +11,6 @@
 #include "ServiceBroker.h"
 #include "cores/DataCacheCore.h"
 #include "cores/IPlayer.h"
-#if defined(TARGET_ANDROID)
-#include "cores/VideoPlayer/DVDFileInfo.h"
-#endif
 #include "cores/VideoPlayer/VideoPlayer.h"
 #include "cores/playercorefactory/PlayerCoreFactory.h"
 #include "guilib/GUIComponent.h"
@@ -59,7 +56,6 @@ void CApplicationPlayer::CloseFile(bool reopen)
 {
 #if defined(TARGET_ANDROID)
   m_seekHandler.Reset();
-  CDVDFileInfo::ResetSeekPreview();
 #endif
   std::shared_ptr<IPlayer> player = GetInternal();
   if (player)
@@ -150,10 +146,7 @@ bool CApplicationPlayer::OpenFile(const CFileItem& item, const CPlayerOptions& o
   }
 
 #if defined(TARGET_ANDROID)
-  // A preview session belongs to exactly one playing item. Reset it for
-  // seamless playlist transitions that do not pass through CloseFile().
   m_seekHandler.Reset();
-  CDVDFileInfo::ResetSeekPreview();
 #endif
   bool ret = player->OpenFile(item, options);
 

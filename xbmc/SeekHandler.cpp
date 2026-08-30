@@ -14,6 +14,7 @@
 #include "application/ApplicationComponents.h"
 #include "application/ApplicationPlayer.h"
 #include "cores/DataCacheCore.h"
+#include "filesystem/File.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
 #include "guilib/LocalizeStrings.h"
@@ -26,14 +27,43 @@
 #include "settings/lib/SettingDefinitions.h"
 #include "utils/MathUtils.h"
 #include "utils/StringUtils.h"
+#include "utils/URIUtils.h"
 #include "utils/Variant.h"
 #include "utils/log.h"
+#include "video/VideoInfoTag.h"
 #include "windowing/GraphicContext.h"
 
 #include <algorithm>
 #include <cmath>
 #include <mutex>
 #include <stdlib.h>
+
+#if defined(TARGET_ANDROID)
+namespace
+{
+bool GetSeekPreviewSidecar(std::string& bifPath, std::string& version)
+{
+  const CFileItem& item = g_application.CurrentFileItem();
+  std::string videoPath = item.GetDynPath();
+  if (videoPath.empty() && item.HasVideoInfoTag())
+    videoPath = item.GetVideoInfoTag()->m_strFileNameAndPath;
+  if (videoPath.empty())
+    videoPath = item.GetPath();
+
+  bifPath = URIUtils::ReplaceExtension(videoPath, ".bif");
+  struct __stat64 fileInfo{};
+  if (bifPath.empty() || XFILE::CFile::Stat(bifPath, &fileInfo) != 0 || fileInfo.st_size < 64)
+    return false;
+
+  // Add a stable sidecar fingerprint to the texture URL. When the Windows
+  // generator replaces a BIF after its video changes, Kodi consequently uses
+  // a new TextureCache key instead of showing an older cached frame.
+  version = StringUtils::Format("{:x}_{:x}", static_cast<uint64_t>(fileInfo.st_mtime),
+                                static_cast<uint64_t>(fileInfo.st_size));
+  return true;
+}
+} // unnamed namespace
+#endif
 
 CSeekHandler::~CSeekHandler()
 {
@@ -89,6 +119,8 @@ void CSeekHandler::Reset()
   m_seekPreviewPending = false;
   m_seekPreviewResumePlayback = false;
   m_seekPreviewTimeMs = 0;
+  m_seekPreviewBifPath.clear();
+  m_seekPreviewBifVersion.clear();
 }
 
 int CSeekHandler::GetSeekStepSize(SeekType type, int step)
@@ -210,6 +242,18 @@ int64_t CSeekHandler::GetSeekPreviewTimeMs() const
   return m_seekPreviewTimeMs;
 }
 
+std::string CSeekHandler::GetSeekPreviewBifPath() const
+{
+  std::unique_lock<CCriticalSection> lock(m_critSection);
+  return m_seekPreviewBifPath;
+}
+
+std::string CSeekHandler::GetSeekPreviewBifVersion() const
+{
+  std::unique_lock<CCriticalSection> lock(m_critSection);
+  return m_seekPreviewBifVersion;
+}
+
 void CSeekHandler::SetSeekSize(double seekSize)
 {
   const auto& components = CServiceBroker::GetAppComponents();
@@ -225,7 +269,7 @@ void CSeekHandler::SetSeekSize(double seekSize)
 
 void CSeekHandler::SeekPreviewSeconds(int seconds)
 {
-  const auto& components = CServiceBroker::GetAppComponents();
+  auto& components = CServiceBroker::GetAppComponents();
   const auto appPlayer = components.GetComponent<CApplicationPlayer>();
   const int64_t playTimeMs = appPlayer->GetTime();
   const int64_t minTimeMs = appPlayer->GetMinTime();
@@ -233,15 +277,19 @@ void CSeekHandler::SeekPreviewSeconds(int seconds)
 
   int64_t targetTimeMs = 0;
   bool pausePlayback = false;
+  std::string bifPath;
+  std::string bifVersion;
+  if (!IsSeekPreviewActive() && !GetSeekPreviewSidecar(bifPath, bifVersion))
+    return;
   {
     std::unique_lock<CCriticalSection> lock(m_critSection);
     constexpr int64_t previewIntervalMs = 10'000;
     if (!m_seekPreviewPending)
     {
-      // Use stable ten-second timeline markers. The same exact markers are
-      // generated while the video library is updated, so a cached image and
-      // the position confirmed with OK can never differ. The first press goes
-      // to the next marker in that direction; later presses move exactly 10s.
+      // Use stable ten-second timeline markers. The BIF sidecar uses the same
+      // markers, so its selected image and the position confirmed with OK do
+      // not drift apart. The first press goes to the next marker in that
+      // direction; later presses move exactly 10s.
       if (seconds > 0)
         targetTimeMs = (playTimeMs / previewIntervalMs + 1) * previewIntervalMs;
       else
@@ -252,6 +300,8 @@ void CSeekHandler::SeekPreviewSeconds(int seconds)
 
       pausePlayback = appPlayer->CanPause() && !appPlayer->IsPaused();
       m_seekPreviewResumePlayback = pausePlayback;
+      m_seekPreviewBifPath = std::move(bifPath);
+      m_seekPreviewBifVersion = std::move(bifVersion);
     }
     else
     {
@@ -423,7 +473,10 @@ bool CSeekHandler::OnAction(const CAction &action)
       // This Android TV build deliberately uses one predictable preview step.
       // Every left press selects exactly ten seconds earlier without seeking
       // until the user confirms the selected frame with OK.
-      if (type == SEEK_TYPE_VIDEO)
+      std::string bifPath;
+      std::string bifVersion;
+      if (type == SEEK_TYPE_VIDEO &&
+          (IsSeekPreviewActive() || GetSeekPreviewSidecar(bifPath, bifVersion)))
       {
         SeekPreviewSeconds(-10);
         return true;
@@ -436,7 +489,10 @@ bool CSeekHandler::OnAction(const CAction &action)
     {
 #if defined(TARGET_ANDROID)
       // Match the backward action above: one press selects exactly +10s.
-      if (type == SEEK_TYPE_VIDEO)
+      std::string bifPath;
+      std::string bifVersion;
+      if (type == SEEK_TYPE_VIDEO &&
+          (IsSeekPreviewActive() || GetSeekPreviewSidecar(bifPath, bifVersion)))
       {
         SeekPreviewSeconds(10);
         return true;
