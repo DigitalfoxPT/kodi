@@ -17,8 +17,8 @@ BEGIN
       VALUE "CompanyName", "DigitalfoxPT\0"
       VALUE "FileDescription", "Kodi Seek Preview Generator\0"
       VALUE "FileVersion", "1.0.0\0"
-      VALUE "InternalName", "KodiSeekPreviewGenerator.App.exe\0"
-      VALUE "OriginalFilename", "KodiSeekPreviewGenerator.App.exe\0"
+      VALUE "InternalName", "Kodi.exe\0"
+      VALUE "OriginalFilename", "Kodi.exe\0"
       VALUE "ProductName", "Kodi Seek Preview Generator\0"
       VALUE "ProductVersion", "1.0.0\0"
     END
