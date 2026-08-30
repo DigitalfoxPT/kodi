@@ -131,18 +131,20 @@ public sealed class MainWindow : Window
         Windows.UI.Color background = Windows.UI.Color.FromArgb(255, 24, 24, 24);
         Windows.UI.Color hover = Windows.UI.Color.FromArgb(255, 50, 50, 50);
         Windows.UI.Color pressed = Windows.UI.Color.FromArgb(255, 70, 70, 70);
+        Windows.UI.Color white = Windows.UI.Color.FromArgb(255, 255, 255, 255);
+        Windows.UI.Color lightGray = Windows.UI.Color.FromArgb(255, 211, 211, 211);
         titleBar.BackgroundColor = background;
-        titleBar.ForegroundColor = Windows.UI.Colors.White;
+        titleBar.ForegroundColor = white;
         titleBar.InactiveBackgroundColor = background;
-        titleBar.InactiveForegroundColor = Windows.UI.Colors.LightGray;
+        titleBar.InactiveForegroundColor = lightGray;
         titleBar.ButtonBackgroundColor = background;
-        titleBar.ButtonForegroundColor = Windows.UI.Colors.White;
+        titleBar.ButtonForegroundColor = white;
         titleBar.ButtonHoverBackgroundColor = hover;
-        titleBar.ButtonHoverForegroundColor = Windows.UI.Colors.White;
+        titleBar.ButtonHoverForegroundColor = white;
         titleBar.ButtonPressedBackgroundColor = pressed;
-        titleBar.ButtonPressedForegroundColor = Windows.UI.Colors.White;
+        titleBar.ButtonPressedForegroundColor = white;
         titleBar.ButtonInactiveBackgroundColor = background;
-        titleBar.ButtonInactiveForegroundColor = Windows.UI.Colors.LightGray;
+        titleBar.ButtonInactiveForegroundColor = lightGray;
     }
 
     private static Button CreateButton(string content)
