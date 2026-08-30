@@ -230,7 +230,7 @@ public sealed class MainWindow : Window
         {
             Padding = new Thickness(32, 28, 32, 36),
             MaxWidth = 1680,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalAlignment = HorizontalAlignment.Center,
         };
         page.Children.Add(layout);
         var scroller = new ScrollViewer
@@ -239,6 +239,13 @@ public sealed class MainWindow : Window
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
+        scroller.SizeChanged += (_, args) =>
+        {
+            const double horizontalViewportMargin = 64;
+            page.Width = Math.Min(
+                page.MaxWidth,
+                Math.Max(0, args.NewSize.Width - horizontalViewportMargin));
         };
         _rootLayout.Children.Add(scroller);
         Content = _rootLayout;
