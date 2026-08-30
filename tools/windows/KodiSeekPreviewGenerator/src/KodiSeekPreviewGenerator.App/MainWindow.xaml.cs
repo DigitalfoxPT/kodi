@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using KodiSeekPreviewGenerator.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Windows.Graphics;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 
@@ -18,7 +17,6 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        AppWindow.Resize(new SizeInt32(960, 720));
         string? lastFolder = AppSettings.LoadLastFolder();
         if (!string.IsNullOrWhiteSpace(lastFolder) && Directory.Exists(lastFolder))
             FolderPathBox.Text = lastFolder;
