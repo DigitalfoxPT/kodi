@@ -60,7 +60,7 @@ public sealed class MainWindow : Window
             {
                 Glyph = "\uE714",
                 FontSize = 30,
-                Foreground = CreateBrush(117, 198, 255),
+                Foreground = CreateBrush(255, 255, 255),
             },
         };
         header.Children.Add(logoContainer);
