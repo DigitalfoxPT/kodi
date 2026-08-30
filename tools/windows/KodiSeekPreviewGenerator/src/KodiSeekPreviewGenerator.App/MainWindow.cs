@@ -230,7 +230,7 @@ public sealed class MainWindow : Window
         {
             Padding = new Thickness(32, 28, 32, 36),
             MaxWidth = 1680,
-            HorizontalAlignment = HorizontalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
         };
         page.Children.Add(layout);
         var scroller = new ScrollViewer
