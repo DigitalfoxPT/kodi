@@ -450,6 +450,7 @@ bool CSeekHandler::OnAction(const CAction &action)
     switch (action.GetID())
     {
       case ACTION_SELECT_ITEM:
+      case ACTION_SHOW_OSD:
         return CommitSeekPreview();
       case ACTION_NAV_BACK:
       case ACTION_PREVIOUS_MENU:
