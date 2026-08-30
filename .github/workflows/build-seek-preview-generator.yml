@@ -44,7 +44,33 @@ jobs:
           --configuration Release
           --runtime win-x64
           --self-contained true
+          --property Platform=x64
           --output "${{ runner.temp }}/KodiSeekPreviewGenerator"
+
+      - name: Verify published application starts
+        shell: pwsh
+        run: |
+          $application = Join-Path `
+            $env:RUNNER_TEMP `
+            "KodiSeekPreviewGenerator/KodiSeekPreviewGenerator.App.exe"
+          $process = Start-Process -FilePath $application -PassThru
+          Start-Sleep -Seconds 8
+          $process.Refresh()
+          if ($process.HasExited) {
+            $diagnostic = Join-Path `
+              $env:LOCALAPPDATA `
+              "KodiSeekPreviewGenerator/startup-trace.log"
+            if (Test-Path -LiteralPath $diagnostic) {
+              Get-Content -LiteralPath $diagnostic
+            }
+            throw "Published application exited during its startup test"
+          }
+          if ($process.MainWindowHandle -eq 0) {
+            Stop-Process -Id $process.Id -Force
+            throw "Published application did not create a main window"
+          }
+          Write-Host "Opened window: $($process.MainWindowTitle)"
+          Stop-Process -Id $process.Id -Force
 
       - name: Bundle FFmpeg
         shell: pwsh
