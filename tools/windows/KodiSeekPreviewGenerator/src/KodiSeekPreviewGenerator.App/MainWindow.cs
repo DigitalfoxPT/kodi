@@ -26,15 +26,19 @@ public sealed class MainWindow : Window
 
     public MainWindow()
     {
+        StartupDiagnostics.Trace("MainWindow: constructor entered");
         Title = "Kodi Seek Preview Generator";
+        StartupDiagnostics.Trace("MainWindow: title set");
 
         _rootLayout = new Grid
         {
             Padding = new Thickness(24),
             RequestedTheme = ElementTheme.Dark,
         };
+        StartupDiagnostics.Trace("MainWindow: root Grid created");
 
         var layout = new StackPanel { Spacing = 12 };
+        StartupDiagnostics.Trace("MainWindow: StackPanel created");
         layout.Children.Add(new TextBlock
         {
             Text = "Kodi Seek Preview Generator",
@@ -53,6 +57,7 @@ public sealed class MainWindow : Window
             IsReadOnly = true,
         };
         layout.Children.Add(_folderPathBox);
+        StartupDiagnostics.Trace("MainWindow: folder controls created");
 
         var buttonPanel = new StackPanel
         {
@@ -66,6 +71,7 @@ public sealed class MainWindow : Window
         buttonPanel.Children.Add(_generateButton);
         buttonPanel.Children.Add(_cancelButton);
         layout.Children.Add(buttonPanel);
+        StartupDiagnostics.Trace("MainWindow: buttons created");
 
         _generationProgressBar = new ProgressBar
         {
@@ -74,6 +80,7 @@ public sealed class MainWindow : Window
             Value = 0,
         };
         layout.Children.Add(_generationProgressBar);
+        StartupDiagnostics.Trace("MainWindow: progress bar created");
 
         _statusTitleTextBlock = new TextBlock
         {
@@ -87,6 +94,7 @@ public sealed class MainWindow : Window
         };
         layout.Children.Add(_statusTitleTextBlock);
         layout.Children.Add(_statusMessageTextBlock);
+        StartupDiagnostics.Trace("MainWindow: status controls created");
 
         _logList = new ListView
         {
@@ -95,17 +103,21 @@ public sealed class MainWindow : Window
             ItemsSource = LogMessages,
         };
         layout.Children.Add(_logList);
+        StartupDiagnostics.Trace("MainWindow: list created");
         _rootLayout.Children.Add(layout);
         Content = _rootLayout;
+        StartupDiagnostics.Trace("MainWindow: content assigned");
 
         _rootLayout.Loaded += RootLayout_Loaded;
         _browseButton.Click += BrowseButton_Click;
         _generateButton.Click += GenerateButton_Click;
         _cancelButton.Click += CancelButton_Click;
+        StartupDiagnostics.Trace("MainWindow: events connected");
 
         string? lastFolder = AppSettings.LoadLastFolder();
         if (!string.IsNullOrWhiteSpace(lastFolder) && Directory.Exists(lastFolder))
             _folderPathBox.Text = lastFolder;
+        StartupDiagnostics.Trace("MainWindow: constructor completed");
     }
 
     private async void RootLayout_Loaded(object sender, RoutedEventArgs e)

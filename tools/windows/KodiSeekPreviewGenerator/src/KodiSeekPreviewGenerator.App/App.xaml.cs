@@ -11,7 +11,9 @@ public partial class App : Application
     {
         try
         {
+            StartupDiagnostics.Trace("App constructor: before InitializeComponent");
             InitializeComponent();
+            StartupDiagnostics.Trace("App constructor: after InitializeComponent");
             UnhandledException += OnUnhandledException;
         }
         catch (Exception exception)
@@ -25,8 +27,11 @@ public partial class App : Application
     {
         try
         {
+            StartupDiagnostics.Trace("OnLaunched: before MainWindow constructor");
             _window = new MainWindow();
+            StartupDiagnostics.Trace("OnLaunched: before window activation");
             _window.Activate();
+            StartupDiagnostics.Trace("OnLaunched: after window activation");
         }
         catch (Exception exception)
         {
@@ -68,6 +73,23 @@ internal static class StartupDiagnostics
         catch
         {
             // Diagnostics must never hide the original startup exception.
+        }
+    }
+
+    public static void Trace(string message)
+    {
+        try
+        {
+            string folder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "KodiSeekPreviewGenerator");
+            Directory.CreateDirectory(folder);
+            File.AppendAllText(Path.Combine(folder, "startup-trace.log"),
+                $"{DateTimeOffset.Now:O} {message}{Environment.NewLine}");
+        }
+        catch
+        {
+            // Startup tracing must not affect the application.
         }
     }
 }
