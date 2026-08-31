@@ -336,3 +336,11 @@ exclude_dll.txt
 
 # clangd index
 .cache/
+
+# Local .NET build outputs for the Windows seek preview generator
+/tools/windows/KodiSeekPreviewGenerator/**/bin/
+/tools/windows/KodiSeekPreviewGenerator/**/obj/
+
+# Temporary verification folders created while developing this feature
+/.tmp-run-*/
+/.tmp-winui-*/
