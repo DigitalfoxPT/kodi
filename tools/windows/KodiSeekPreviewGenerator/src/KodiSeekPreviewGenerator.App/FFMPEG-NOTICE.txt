@@ -1,0 +1,8 @@
+This distribution includes FFmpeg from the Windows builds published by Gyan Doshi.
+
+FFmpeg is free software licensed separately from this application. The bundled
+build and corresponding source/license information are available at:
+
+https://www.gyan.dev/ffmpeg/builds/
+https://ffmpeg.org/legal.html
+https://ffmpeg.org/download.html#get-sources
