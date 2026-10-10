@@ -1,0 +1,222 @@
+name: Build Windows Seek Preview Generator
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seek-preview-generator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows-x64:
+    name: WinUI 3 x64
+    runs-on: windows-2022
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Validate BIF writer
+        run: >-
+          dotnet run
+          --project tools/windows/KodiSeekPreviewGenerator/tests/KodiSeekPreviewGenerator.Core.SmokeTests/KodiSeekPreviewGenerator.Core.SmokeTests.csproj
+          --configuration Release
+
+      - name: Audit NuGet dependencies
+        shell: pwsh
+        run: |
+          $project = "tools/windows/KodiSeekPreviewGenerator/src/KodiSeekPreviewGenerator.App/KodiSeekPreviewGenerator.App.csproj"
+          dotnet restore $project --runtime win-x64 --property Platform=x64
+          if ($LASTEXITCODE -ne 0) { throw "NuGet restore failed" }
+          $report = dotnet list $project package --vulnerable --include-transitive --format json
+          if ($LASTEXITCODE -ne 0) { throw "NuGet vulnerability audit failed" }
+          $report | Set-Content "${{ runner.temp }}/nuget-audit.json"
+          $audit = ($report -join "`n") | ConvertFrom-Json
+          if ($audit.sources.Count -eq 0) { throw "NuGet vulnerability sources are unavailable" }
+          foreach ($framework in $audit.projects.frameworks) {
+            foreach ($package in @($framework.topLevelPackages) + @($framework.transitivePackages)) {
+              if ($package.vulnerabilities.Count -gt 0) {
+                throw "Vulnerable dependency: $($package.id) $($package.resolvedVersion)"
+              }
+            }
+          }
+
+      - name: Publish unpackaged self-contained WinUI 3 app
+        run: >-
+          dotnet publish
+          tools/windows/KodiSeekPreviewGenerator/src/KodiSeekPreviewGenerator.App/KodiSeekPreviewGenerator.App.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          --property Platform=x64
+          --output "${{ runner.temp }}/KodiSeekPreviewGenerator/Data"
+
+      - name: Verify published application starts
+        shell: pwsh
+        run: |
+          $application = Join-Path `
+            $env:RUNNER_TEMP `
+            "KodiSeekPreviewGenerator/Data/KodiSeekPreviewGenerator.App.exe"
+          $process = Start-Process -FilePath $application -PassThru
+          Start-Sleep -Seconds 8
+          $process.Refresh()
+          if ($process.HasExited) {
+            throw "Published application exited during its startup test"
+          }
+          if ($process.MainWindowHandle -eq 0) {
+            Stop-Process -Id $process.Id -Force
+            throw "Published application did not create a main window"
+          }
+          Write-Host "Opened window: $($process.MainWindowTitle)"
+          Stop-Process -Id $process.Id -Force
+
+      - name: Bundle FFmpeg
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "ffmpeg-release-essentials.zip"
+          $expanded = Join-Path $env:RUNNER_TEMP "ffmpeg-release-essentials"
+          Invoke-WebRequest `
+            -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" `
+            -OutFile $archive
+          Expand-Archive -LiteralPath $archive -DestinationPath $expanded
+          $ffmpeg = Get-ChildItem -LiteralPath $expanded -Filter "ffmpeg.exe" -Recurse |
+            Select-Object -First 1
+          if ($null -eq $ffmpeg) {
+            throw "ffmpeg.exe was not found in the downloaded archive"
+          }
+          Copy-Item -LiteralPath $ffmpeg.FullName `
+            -Destination "${{ runner.temp }}/KodiSeekPreviewGenerator/Data/ffmpeg.exe"
+          & "${{ runner.temp }}/KodiSeekPreviewGenerator/Data/ffmpeg.exe" -version |
+            Set-Content "${{ runner.temp }}/KodiSeekPreviewGenerator/Data/FFMPEG-VERSION.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Bundled FFmpeg failed its version check" }
+
+      - name: Keep Portuguese language resources
+        shell: pwsh
+        run: |
+          $dataDirectory = [System.IO.Path]::GetFullPath(
+            (Join-Path $env:RUNNER_TEMP "KodiSeekPreviewGenerator/Data"))
+          $runnerTemp = [System.IO.Path]::GetFullPath($env:RUNNER_TEMP)
+          if (-not $dataDirectory.StartsWith(
+              $runnerTemp + [System.IO.Path]::DirectorySeparatorChar,
+              [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Package data directory is outside RUNNER_TEMP"
+          }
+
+          $keptCultures = @("pt-PT", "en-US")
+          foreach ($folder in Get-ChildItem -LiteralPath $dataDirectory -Directory) {
+            try {
+              $null = [System.Globalization.CultureInfo]::GetCultureInfo($folder.Name)
+            }
+            catch {
+              continue
+            }
+
+            if ($keptCultures -contains $folder.Name) {
+              continue
+            }
+
+            $resolvedFolder = [System.IO.Path]::GetFullPath($folder.FullName)
+            if (-not $resolvedFolder.StartsWith(
+                $dataDirectory + [System.IO.Path]::DirectorySeparatorChar,
+                [System.StringComparison]::OrdinalIgnoreCase)) {
+              throw "Refusing to remove a folder outside the package data directory"
+            }
+            Remove-Item -LiteralPath $resolvedFolder -Recurse -Force
+          }
+
+      - name: Build tidy package launcher
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path `
+            ${env:ProgramFiles(x86)} `
+            "Microsoft Visual Studio/Installer/vswhere.exe"
+          $visualStudio = & $vswhere `
+            -latest `
+            -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+            -property installationPath
+          if ([string]::IsNullOrWhiteSpace($visualStudio)) {
+            throw "Visual Studio C++ build tools were not found"
+          }
+
+          $developerPrompt = Join-Path `
+            $visualStudio `
+            "VC/Auxiliary/Build/vcvars64.bat"
+          $launcherDirectory = Resolve-Path `
+            "tools/windows/KodiSeekPreviewGenerator/src/KodiSeekPreviewGenerator.Launcher"
+          $launcherSource = Join-Path $launcherDirectory "Launcher.cpp"
+          $launcherResource = Join-Path $launcherDirectory "Launcher.rc"
+          $compiledResource = Join-Path $env:RUNNER_TEMP "KodiSeekPreviewGenerator.res"
+          $launcherOutput = Join-Path `
+            $env:RUNNER_TEMP `
+            "KodiSeekPreviewGenerator/Kodi.exe"
+
+          Push-Location $launcherDirectory
+          try {
+            $compileCommand = `
+              "call `"$developerPrompt`" && " + `
+              "rc.exe /nologo /fo `"$compiledResource`" `"$launcherResource`" && " + `
+              "cl.exe /nologo /O2 /W4 /std:c++17 /utf-8 /DUNICODE /D_UNICODE " + `
+              "`"$launcherSource`" `"$compiledResource`" " + `
+              "/link /SUBSYSTEM:WINDOWS /OUT:`"$launcherOutput`" user32.lib"
+            & cmd.exe /d /s /c $compileCommand
+            if ($LASTEXITCODE -ne 0) {
+              throw "The package launcher could not be compiled"
+            }
+          }
+          finally {
+            Pop-Location
+          }
+
+          if (-not (Test-Path -LiteralPath $launcherOutput)) {
+            throw "The package launcher was not created"
+          }
+
+      - name: Verify tidy package launcher
+        shell: pwsh
+        run: |
+          $launcher = Join-Path `
+            $env:RUNNER_TEMP `
+            "KodiSeekPreviewGenerator/Kodi.exe"
+          $launcherProcess = Start-Process -FilePath $launcher -PassThru
+          $launcherProcess.WaitForExit(10000)
+          if (-not $launcherProcess.HasExited -or $launcherProcess.ExitCode -ne 0) {
+            throw "The package launcher failed"
+          }
+
+          Start-Sleep -Seconds 8
+          $applicationProcessInfo = Get-CimInstance Win32_Process |
+            Where-Object ParentProcessId -eq $launcherProcess.Id |
+            Select-Object -First 1
+          if ($null -eq $applicationProcessInfo) {
+            throw "The package launcher did not start the WinUI application"
+          }
+
+          $applicationProcess = Get-Process -Id $applicationProcessInfo.ProcessId
+          $applicationProcess.Refresh()
+          if ($applicationProcess.HasExited -or $applicationProcess.MainWindowHandle -eq 0) {
+            if (-not $applicationProcess.HasExited) {
+              Stop-Process -Id $applicationProcess.Id -Force
+            }
+            throw "The launched WinUI application did not create a main window"
+          }
+          Write-Host "Opened tidy package window: $($applicationProcess.MainWindowTitle)"
+          Stop-Process -Id $applicationProcess.Id -Force
+
+      - name: Upload Windows application
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: kodi-seek-preview-generator-win-x64
+          path: ${{ runner.temp }}/KodiSeekPreviewGenerator
+          if-no-files-found: error
+          retention-days: 30
